@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-gray-800 rounded-3xl p-6 shadow-xl border border-gray-700">
+        <div class="flex justify-between items-start mb-4">
+            <div>
+                <h2 class="text-2xl font-bold">GPS kuzatuv</h2>
+                {% if profil %}
+                <p class="text-gray-400 text-sm mt-1">{{ profil.ism }}</p>
+                {% else %}
+                <p class="text-amber-400 text-sm mt-1">Profil yo'q — admin bilan bog'laning</p>
+                {% endif %}
+            </div>
+            <a href="{% url 'logout' %}" class="text-sm text-gray-400 hover:text-white underline">Chiqish</a>
+        </div>
+
+        <p id="status-text" class="text-amber-400 font-semibold mb-2 text-center">GPS so'ralmoqda...</p>
+        <p id="coord-text" class="text-gray-500 text-xs text-center mb-6 font-mono break-all">&nbsp;</p>
+
+        <div class="bg-gray-900/60 rounded-2xl p-4 text-sm text-gray-400 space-y-2">
+            <p>Sahifa ochilganda brauzer GPS ruxsatini so'raydi.</p>
+            <p>Ruxsat berilgach, koordinatalar fon rejimida
+                <strong class="text-white">har {{ gps_interval_minutes }} daqiqada</strong> serverga yuboriladi.</p>
+            <p class="text-xs text-gray-500">Telefon ekrani o'chiq bo'lsa GPS to'xtashi mumkin — sahifani ochiq qoldiring.</p>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const INTERVAL_MS = {{ gps_interval_ms|default:300000 }};
+            const UPDATE_URL = '{% url "api_update" %}';
+            const statusEl = document.getElementById('status-text');
+            const coordEl = document.getElementById('coord-text');
+
+            function getCookie(name) {
+                const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+                return m ? decodeURIComponent(m[2]) : '';
+            }
+
+            function csrfToken() {
+                return getCookie('csrftoken') || '{{ csrf_token }}';
+            }
+
+            function setStatus(text, cls) {
+                statusEl.innerText = text;
+                statusEl.className = cls + ' font-semibold mb-2 text-center';
+            }
+
+            async function sendLocation(position) {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                coordEl.innerText = lat.toFixed(6) + ', ' + lng.toFixed(6);
+
+                try {
+                    const res = await fetch(UPDATE_URL, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken()
+                        },
+                        body: JSON.stringify({
+                            latitude: lat,
+                            longitude: lng,
+                            is_mock_location: !!(position.coords.mocked)
+                        })
+                    });
+                    if (res.status === 401) {
+                        window.location.href = '{% url "login" %}';
+                        return;
+                    }
+                    if (!res.ok) {
+                        const data = await res.json().catch(function () { return {}; });
+                        setStatus(data.error || 'Yuborishda xato', 'text-red-400');
+                        return;
+                    }
+                    setStatus('Lokatsiya fon rejimida yuborilmoqda', 'text-green-400');
+                } catch (e) {
+                    setStatus('Tarmoq xatosi — qayta uriniladi', 'text-amber-400');
+                }
+            }
+
+            function handleError(err) {
+                if (err.code === 1) {
+                    setStatus('GPS ruxsati berilmadi. Sozlamalardan yoqing.', 'text-red-400');
+                } else if (err.code === 2) {
+                    setStatus('GPS signal topilmadi', 'text-amber-400');
+                } else {
+                    setStatus('GPS xatosi: ' + (err.message || ''), 'text-red-400');
+                }
+            }
+
+            function requestAndSend() {
+                if (!navigator.geolocation) {
+                    setStatus("Brauzer GPS ni qo'llab-quvvatlamaydi", 'text-red-400');
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(sendLocation, handleError, {
+                    enableHighAccuracy: true,
+                    timeout: 20000,
+                    maximumAge: 60000
+                });
+            }
+
+            requestAndSend();
+            setInterval(requestAndSend, INTERVAL_MS);
+        })();
+    </script>
+</body>
+</html>
