@@ -9,93 +9,145 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; }
-        .custom-avatar-marker {
-            border: 3px solid #ef4444;
+        .avatar-marker {
             border-radius: 50%;
             background: white;
             overflow: hidden;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            box-shadow: 0 0 8px rgba(0,0,0,0.5);
         }
-        .custom-avatar-marker img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar-marker.online  { border: 3px solid #22c55e; }
+        .avatar-marker.offline { border: 3px solid #ef4444; }
+        .avatar-marker img { width: 100%; height: 100%; object-fit: cover; }
+
+        /* Yurish animatsiyasi — online bo'lsa */
+        @keyframes markerPulse {
+            0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
+            70%  { box-shadow: 0 0 0 10px rgba(34,197,94,0); }
+            100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+        }
+        .avatar-marker.online { animation: markerPulse 2s infinite; }
     </style>
 </head>
 <body class="relative bg-gray-100 font-sans overflow-hidden">
 
+    <!-- Sidebar -->
     <div id="sidebar" class="absolute top-0 left-0 h-full w-72 bg-gray-900 text-white z-[999] transform -translate-x-full transition-transform duration-300 flex flex-col shadow-2xl">
         <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-            <h2 id="sidebar-title" class="text-xl font-bold tracking-wide">Kuzatuv paneli</h2>
-            <button type="button" onclick="toggleSidebar()" class="text-gray-400 hover:text-white text-2xl font-bold p-1">&times;</button>
+            <div>
+                <h2 id="sidebar-title" class="text-xl font-bold tracking-wide">Ishchilar</h2>
+                <p id="worker-count" class="text-xs text-gray-400 mt-0.5">0 ta faol</p>
+            </div>
+            <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white text-2xl font-bold p-1">&times;</button>
         </div>
         <div id="user-list" class="flex-1 overflow-y-auto p-2 space-y-2"></div>
         <div class="p-3 border-t border-gray-800 space-y-2">
-            <a href="{% url 'mobil' %}" class="block text-center text-sm text-blue-400 hover:text-blue-300">GPS panel</a>
+            <div id="last-update" class="text-center text-xs text-gray-600">—</div>
             <a href="{% url 'logout' %}" class="block text-center text-sm text-gray-400 hover:text-white">Chiqish</a>
         </div>
     </div>
 
-    <button type="button" onclick="toggleSidebar()" class="absolute top-4 left-4 bg-gray-900 text-white px-4 py-2.5 rounded-xl font-medium shadow-md hover:bg-gray-800 transition z-[998] flex items-center gap-2">
-        ☰ <span id="btn-text">Ro'yxat</span>
+    <!-- Ro'yxat tugmasi -->
+    <button onclick="toggleSidebar()" class="absolute top-4 left-4 bg-gray-900 text-white px-4 py-2.5 rounded-xl font-medium shadow-md hover:bg-gray-800 transition z-[998] flex items-center gap-2">
+        ☰ <span id="btn-text">Ishchilar</span>
+        <span id="online-badge" class="bg-green-500 text-white text-xs rounded-full px-1.5 py-0.5 hidden">0</span>
     </button>
 
+    <!-- Xarita -->
     <div id="map"></div>
 
     <script>
         var map = L.map('map', { zoomControl: false }).setView([41.311081, 69.240562], 12);
         L.control.zoom({ position: 'bottomright' }).addTo(map);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-        var markers = {};
+
+        var markers = {};      // { id: L.marker }
+        var workerData = {};   // { id: {...} } — oxirgi ma'lumot
 
         function toggleSidebar() {
             document.getElementById('sidebar').classList.toggle('-translate-x-full');
         }
 
-        function getCookie(name) {
-            const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-            return m ? decodeURIComponent(m[2]) : '';
+        function timeStr() {
+            const d = new Date();
+            return String(d.getHours()).padStart(2,'0') + ':' +
+                   String(d.getMinutes()).padStart(2,'0') + ':' +
+                   String(d.getSeconds()).padStart(2,'0');
         }
 
         async function yuklash() {
             try {
-                let res = await fetch('{% url "api_map_data" %}', { credentials: 'same-origin' });
+                const res = await fetch('{% url "api_map_data" %}', { credentials: 'same-origin' });
                 if (res.status === 401 || res.status === 403) {
                     window.location.href = '{% url "login" %}';
                     return;
                 }
-                let data = await res.json();
-                document.getElementById('sidebar-title').innerText = data.rejim === 'talim' ? 'Kelmaganlar' : 'Ishchilar';
-                document.getElementById('btn-text').innerText = data.rejim === 'talim' ? 'Kelmaganlar' : 'Ishchilar';
+                const data = await res.json();
 
+                const rejim = data.rejim || 'biznes';
+                const title = rejim === 'talim' ? 'Kelmaganlar' : 'Ishchilar';
+                document.getElementById('sidebar-title').innerText = title;
+                document.getElementById('btn-text').innerText = title;
+
+                const workers = data.majliz || [];
+                const seenIds = {};
+                let onlineCount = 0;
                 let listHtml = '';
-                let seen = {};
 
-                (data.majliz || []).forEach(function (p) {
-                    if (p.lat == null || p.lng == null) return;
-                    seen[p.id] = true;
+                workers.forEach(function (p) {
+                    seenIds[p.id] = true;
+                    workerData[p.id] = p;
 
-                    if (markers[p.id]) {
-                        markers[p.id].setLatLng([p.lat, p.lng]);
-                        markers[p.id].setPopupContent('<b>' + p.ism + '</b><br>Tel: ' + p.telefon + '<br>Holat: ' + p.aloqa);
-                    } else {
-                        let myIcon = L.divIcon({
-                            className: 'custom-avatar-marker',
-                            html: '<img src="' + p.rasm + '" alt="" />',
-                            iconSize: [45, 45],
-                            iconAnchor: [22, 22]
-                        });
-                        markers[p.id] = L.marker([p.lat, p.lng], { icon: myIcon }).addTo(map)
-                            .bindPopup('<b>' + p.ism + '</b><br>Tel: ' + p.telefon + '<br>Holat: ' + p.aloqa);
+                    const isOnline = p.aloqa === 'onlayn';
+                    if (isOnline) onlineCount++;
+
+                    // Marker yangilash yoki yaratish
+                    if (p.lat != null && p.lng != null) {
+                        const cls = 'avatar-marker ' + (isOnline ? 'online' : 'offline');
+                        const html = '<img src="' + p.rasm + '" alt="" />';
+                        const popup = '<b>' + p.ism + '</b><br>Tel: ' + p.telefon +
+                                      '<br>Holat: <span style="color:' + (isOnline ? '#22c55e' : '#ef4444') + '">' +
+                                      (isOnline ? '🟢 Onlayn' : '🔴 Oflayn') + '</span>';
+
+                        if (markers[p.id]) {
+                            // Koordinatni silliq yangilash
+                            markers[p.id].setLatLng([p.lat, p.lng]);
+                            markers[p.id].setPopupContent(popup);
+                            // Marker rangini yangilash
+                            const el = markers[p.id].getElement();
+                            if (el) el.className = cls;
+                        } else {
+                            const icon = L.divIcon({
+                                className: cls,
+                                html:      html,
+                                iconSize:  [46, 46],
+                                iconAnchor:[23, 23]
+                            });
+                            markers[p.id] = L.marker([p.lat, p.lng], { icon: icon })
+                                .addTo(map)
+                                .bindPopup(popup);
+                        }
                     }
 
-                    let statusColor = p.aloqa === 'onlayn' ? 'bg-green-500' : 'bg-red-500';
+                    // Sidebar ro'yxat
+                    const dotColor = isOnline ? 'bg-green-500' : 'bg-red-500';
+                    const latLng   = (p.lat != null) ? p.lat + ',' + p.lng : '';
+                    const flyAction = latLng
+                        ? 'map.flyTo([' + p.lat + ',' + p.lng + '],17);toggleSidebar();'
+                        : '';
                     listHtml +=
-                        '<div onclick="map.flyTo([' + p.lat + ', ' + p.lng + '], 16); toggleSidebar();" class="p-3 bg-gray-800 hover:bg-gray-700 rounded-xl cursor-pointer transition flex items-center gap-3">' +
-                        '<div class="w-10 h-10 rounded-full overflow-hidden border border-gray-600"><img src="' + p.rasm + '" class="w-full h-full object-cover" alt="" /></div>' +
-                        '<div class="flex-1"><h4 class="font-semibold text-sm">' + p.ism + '</h4><p class="text-xs text-gray-400">' + p.telefon + '</p></div>' +
-                        '<span class="w-3 h-3 rounded-full ' + statusColor + '"></span></div>';
+                        '<div onclick="' + flyAction + '" class="p-3 bg-gray-800 hover:bg-gray-700 rounded-xl cursor-pointer transition flex items-center gap-3">' +
+                        '<div class="w-10 h-10 rounded-full overflow-hidden border-2 ' + (isOnline ? 'border-green-500' : 'border-gray-600') + '">' +
+                        '<img src="' + p.rasm + '" class="w-full h-full object-cover" alt="" /></div>' +
+                        '<div class="flex-1">' +
+                        '<h4 class="font-semibold text-sm">' + p.ism + '</h4>' +
+                        '<p class="text-xs text-gray-400">' + p.telefon + '</p>' +
+                        '</div>' +
+                        '<span class="w-3 h-3 rounded-full ' + dotColor + '"></span></div>';
                 });
 
+                // Ko'rinmay qolgan markerlarni o'chirish
                 Object.keys(markers).forEach(function (id) {
-                    if (!seen[id]) {
+                    if (!seenIds[id]) {
                         map.removeLayer(markers[id]);
                         delete markers[id];
                     }
@@ -103,12 +155,25 @@
 
                 document.getElementById('user-list').innerHTML = listHtml ||
                     '<p class="text-gray-500 text-sm p-3">Hozircha faol lokatsiya yo\'q</p>';
+
+                document.getElementById('worker-count').innerText = onlineCount + ' ta onlayn';
+                document.getElementById('last-update').innerText = 'Yangilandi: ' + timeStr();
+
+                const badge = document.getElementById('online-badge');
+                if (onlineCount > 0) {
+                    badge.innerText = onlineCount;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+
             } catch (err) {
                 console.error('Xatolik:', err);
             }
         }
 
-        setInterval(yuklash, 15000);
+        // Har 1 soniyada yangilash
+        setInterval(yuklash, 1000);
         yuklash();
     </script>
 </body>

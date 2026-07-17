@@ -3,114 +3,266 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>GPS Panel</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        body { -webkit-user-select: none; user-select: none; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
+        }
+        .gps-pulse   { animation: pulse 1.5s infinite; }
+        .gps-stopped { animation: none; }
+    </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-gray-800 rounded-3xl p-6 shadow-xl border border-gray-700">
-        <div class="flex justify-between items-start mb-4">
-            <div>
-                <h2 class="text-2xl font-bold">GPS kuzatuv</h2>
-                {% if profil %}
-                <p class="text-gray-400 text-sm mt-1">{{ profil.ism }}</p>
-                {% else %}
-                <p class="text-amber-400 text-sm mt-1">Profil yo'q — admin bilan bog'laning</p>
-                {% endif %}
-            </div>
-            <a href="{% url 'logout' %}" class="text-sm text-gray-400 hover:text-white underline">Chiqish</a>
+<div class="w-full max-w-md space-y-4">
+
+    <div class="bg-gray-800 rounded-3xl p-6 shadow-xl border border-gray-700">
+        <div class="mb-5">
+            <h2 class="text-2xl font-bold">GPS kuzatuv</h2>
+            {% if profil %}
+            <p class="text-gray-400 text-sm mt-1">{{ profil.ism }}</p>
+            {% else %}
+            <p class="text-amber-400 text-sm mt-1">Profil yo'q — admin bilan bog'laning</p>
+            {% endif %}
         </div>
 
-        <p id="status-text" class="text-amber-400 font-semibold mb-2 text-center">GPS so'ralmoqda...</p>
-        <p id="coord-text" class="text-gray-500 text-xs text-center mb-6 font-mono break-all">&nbsp;</p>
+        <!-- GPS indikator -->
+        <div class="flex flex-col items-center my-6">
+            <div id="gps-icon" class="w-20 h-20 rounded-full bg-gray-700 flex items-center justify-center text-4xl mb-4 gps-stopped">📍</div>
+            <p id="status-text" class="text-amber-400 font-bold text-center text-base">GPS so'ralmoqda...</p>
+            <p id="coord-text" class="text-gray-500 text-xs text-center mt-2 font-mono break-all">&nbsp;</p>
+            <p id="accuracy-text" class="text-gray-600 text-xs text-center mt-1">&nbsp;</p>
+        </div>
 
-        <div class="bg-gray-900/60 rounded-2xl p-4 text-sm text-gray-400 space-y-2">
-            <p>Sahifa ochilganda brauzer GPS ruxsatini so'raydi.</p>
-            <p>Ruxsat berilgach, koordinatalar fon rejimida
-                <strong class="text-white">har {{ gps_interval_minutes }} daqiqada</strong> serverga yuboriladi.</p>
-            <p class="text-xs text-gray-500">Telefon ekrani o'chiq bo'lsa GPS to'xtashi mumkin — sahifani ochiq qoldiring.</p>
+        <!-- Statistika -->
+        <div class="grid grid-cols-3 gap-3 mb-5">
+            <div class="bg-gray-900 rounded-2xl p-3 text-center">
+                <p class="text-xl font-bold text-green-400" id="sent-count">0</p>
+                <p class="text-xs text-gray-500 mt-1">Yuborildi</p>
+            </div>
+            <div class="bg-gray-900 rounded-2xl p-3 text-center">
+                <p class="text-xl font-bold text-amber-400" id="queue-count">0</p>
+                <p class="text-xs text-gray-500 mt-1">Navbatda</p>
+            </div>
+            <div class="bg-gray-900 rounded-2xl p-3 text-center">
+                <p class="text-xl font-bold text-blue-400" id="last-time">--:--</p>
+                <p class="text-xs text-gray-500 mt-1">So'nggi</p>
+            </div>
+        </div>
+
+        <!-- WakeLock holati -->
+        <div id="wakelock-ok" class="hidden bg-green-900/40 border border-green-700 rounded-xl px-4 py-2 text-xs text-green-400 text-center mb-3">
+            🔒 Ekran bloklash o'chirilgan — GPS to'xtatilmaydi
+        </div>
+        <div id="wakelock-no" class="hidden bg-amber-900/40 border border-amber-700 rounded-xl px-4 py-2 text-xs text-amber-400 text-center mb-3">
+            ⚠️ Sahifani yopmang! Zaryadda tutish tavsiya etiladi
+        </div>
+
+        <!-- Qo'llanma -->
+        <div class="bg-gray-900/60 rounded-2xl p-4 text-sm text-gray-400 space-y-1.5">
+            <p>📡 Harakat qilsangiz — <strong class="text-white">darhol</strong> yuboriladi</p>
+            <p>⏱ Har <strong class="text-white">1 soniyada</strong> koordinat yangilanadi</p>
+            <p>📴 Internet yo'q bo'lsa — saqlanib, keyinchalik yuboriladi</p>
         </div>
     </div>
 
-    <script>
-        (function () {
-            const INTERVAL_MS = {{ gps_interval_ms|default:300000 }};
-            const UPDATE_URL = '{% url "api_update" %}';
-            const statusEl = document.getElementById('status-text');
-            const coordEl = document.getElementById('coord-text');
+    <!-- Qo'lda yuborish -->
+    <button onclick="manualSend()"
+        class="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold py-4 rounded-2xl transition text-base shadow-lg">
+        📤 Hozir yuborish
+    </button>
 
-            function getCookie(name) {
-                const m = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-                return m ? decodeURIComponent(m[2]) : '';
+</div>
+<script>
+(function () {
+    const UPDATE_URL   = '{% url "api_update" %}';
+    const SEND_EVERY   = 1000;    // har 1 soniyada serverga yuborish
+    const MIN_DISTANCE = 3;       // 3 metr yursa darhol yuborish
+    const MAX_QUEUE    = 300;
+
+    const statusEl   = document.getElementById('status-text');
+    const coordEl    = document.getElementById('coord-text');
+    const accuracyEl = document.getElementById('accuracy-text');
+    const iconEl     = document.getElementById('gps-icon');
+    const sentEl     = document.getElementById('sent-count');
+    const queueEl    = document.getElementById('queue-count');
+    const lastEl     = document.getElementById('last-time');
+    const wlOk       = document.getElementById('wakelock-ok');
+    const wlNo       = document.getElementById('wakelock-no');
+
+    let sentCount    = 0;
+    let offlineQueue = [];
+    let lastLat      = null;
+    let lastLng      = null;
+    let prevLat      = null;
+    let prevLng      = null;
+    let lastSentAt   = 0;
+    let wakeLock     = null;
+    let isSending    = false;
+
+    function csrf() {
+        const m = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/);
+        return m ? decodeURIComponent(m[2]) : '{{ csrf_token }}';
+    }
+
+    function setStatus(text, cls) {
+        statusEl.innerText = text;
+        statusEl.className = cls + ' font-bold text-center text-base';
+    }
+
+    function timeStr() {
+        const d = new Date();
+        return String(d.getHours()).padStart(2,'0') + ':' +
+               String(d.getMinutes()).padStart(2,'0') + ':' +
+               String(d.getSeconds()).padStart(2,'0');
+    }
+
+    function updateUI() {
+        sentEl.innerText  = sentCount;
+        queueEl.innerText = offlineQueue.length;
+    }
+
+    function distance(lat1, lng1, lat2, lng2) {
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 +
+                  Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    // ── WakeLock ────────────────────────────────────────────────
+    async function acquireWakeLock() {
+        if (!('wakeLock' in navigator)) { wlNo.classList.remove('hidden'); return; }
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wlOk.classList.remove('hidden');
+            wlNo.classList.add('hidden');
+            wakeLock.addEventListener('release', () => {
+                wakeLock = null;
+                wlOk.classList.add('hidden');
+                if (document.visibilityState === 'visible') acquireWakeLock();
+            });
+        } catch { wlNo.classList.remove('hidden'); }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            if (!wakeLock) acquireWakeLock();
+            sendNow();
+        }
+    });
+
+    // ── Serverga yuborish ───────────────────────────────────────
+    async function sendNow() {
+        if (lastLat === null || isSending) return;
+        isSending = true;
+
+        offlineQueue.push({
+            latitude:  lastLat,
+            longitude: lastLng,
+            vaqt:      new Date().toISOString()
+        });
+        if (offlineQueue.length > MAX_QUEUE) offlineQueue = offlineQueue.slice(-MAX_QUEUE);
+        updateUI();
+
+        try {
+            const res = await fetch(UPDATE_URL, {
+                method:      'POST',
+                credentials: 'same-origin',
+                headers:     { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+                body:        JSON.stringify({
+                    latitude:         lastLat,
+                    longitude:        lastLng,
+                    is_mock_location: false,
+                    oflayn_nuqtalar:  offlineQueue.slice(0, -1)
+                })
+            });
+
+            if (res.status === 401) { window.location.href = '{% url "login" %}'; return; }
+
+            if (res.ok) {
+                sentCount   += offlineQueue.length;
+                offlineQueue = [];
+                lastSentAt   = Date.now();
+                lastEl.innerText = timeStr();
+                setStatus('✅ Yuborildi — ' + timeStr(), 'text-green-400');
+            } else {
+                const d = await res.json().catch(() => ({}));
+                setStatus('❌ ' + (d.error || 'Server xatosi'), 'text-red-400');
             }
+        } catch {
+            setStatus('📴 Internet yo\'q — ' + offlineQueue.length + ' ta saqlanди', 'text-amber-400');
+        }
 
-            function csrfToken() {
-                return getCookie('csrftoken') || '{{ csrf_token }}';
-            }
+        isSending = false;
+        updateUI();
+    }
 
-            function setStatus(text, cls) {
-                statusEl.innerText = text;
-                statusEl.className = cls + ' font-semibold mb-2 text-center';
-            }
+    window.manualSend = sendNow;
 
-            async function sendLocation(position) {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                coordEl.innerText = lat.toFixed(6) + ', ' + lng.toFixed(6);
+    // ── GPS watchPosition ────────────────────────────────────────
+    function startGPS() {
+        if (!navigator.geolocation) {
+            setStatus("Brauzer GPS ni qo'llab-quvvatlamaydi", 'text-red-400');
+            return;
+        }
 
-                try {
-                    const res = await fetch(UPDATE_URL, {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': csrfToken()
-                        },
-                        body: JSON.stringify({
-                            latitude: lat,
-                            longitude: lng,
-                            is_mock_location: !!(position.coords.mocked)
-                        })
-                    });
-                    if (res.status === 401) {
-                        window.location.href = '{% url "login" %}';
-                        return;
-                    }
-                    if (!res.ok) {
-                        const data = await res.json().catch(function () { return {}; });
-                        setStatus(data.error || 'Yuborishda xato', 'text-red-400');
-                        return;
-                    }
-                    setStatus('Lokatsiya fon rejimida yuborilmoqda', 'text-green-400');
-                } catch (e) {
-                    setStatus('Tarmoq xatosi — qayta uriniladi', 'text-amber-400');
+        navigator.geolocation.watchPosition(
+            function onPos(pos) {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const acc = Math.round(pos.coords.accuracy);
+
+                lastLat = lat;
+                lastLng = lng;
+
+                coordEl.innerText    = lat.toFixed(6) + ', ' + lng.toFixed(6);
+                accuracyEl.innerText = '±' + acc + ' m aniqlik';
+                iconEl.className     = 'w-20 h-20 rounded-full bg-green-900 flex items-center justify-center text-4xl mb-4 gps-pulse';
+                iconEl.innerText     = '📍';
+
+                // Harakatlansa darhol yuborish
+                if (prevLat !== null && distance(prevLat, prevLng, lat, lng) >= MIN_DISTANCE) {
+                    setStatus('🚶 Harakat — darhol yuborilmoqda', 'text-blue-400');
+                    sendNow();
                 }
-            }
-
-            function handleError(err) {
+                prevLat = lat;
+                prevLng = lng;
+            },
+            function onErr(err) {
+                iconEl.className = 'w-20 h-20 rounded-full bg-red-900 flex items-center justify-center text-4xl mb-4 gps-stopped';
+                iconEl.innerText = '❌';
                 if (err.code === 1) {
-                    setStatus('GPS ruxsati berilmadi. Sozlamalardan yoqing.', 'text-red-400');
+                    setStatus('GPS ruxsati berilmadi! Sozlamalardan yoqing.', 'text-red-400');
                 } else if (err.code === 2) {
-                    setStatus('GPS signal topilmadi', 'text-amber-400');
+                    setStatus('GPS signal topilmadi — kutilmoqda...', 'text-amber-400');
                 } else {
-                    setStatus('GPS xatosi: ' + (err.message || ''), 'text-red-400');
+                    setStatus('GPS xatosi — qayta urinilmoqda...', 'text-amber-400');
+                    setTimeout(startGPS, 5000);
                 }
-            }
+            },
+            { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+        );
+    }
 
-            function requestAndSend() {
-                if (!navigator.geolocation) {
-                    setStatus("Brauzer GPS ni qo'llab-quvvatlamaydi", 'text-red-400');
-                    return;
-                }
-                navigator.geolocation.getCurrentPosition(sendLocation, handleError, {
-                    enableHighAccuracy: true,
-                    timeout: 20000,
-                    maximumAge: 60000
-                });
-            }
+    // ── Har 1 soniyada yuborish tsikli ──────────────────────────
+    setInterval(sendNow, SEND_EVERY);
 
-            requestAndSend();
-            setInterval(requestAndSend, INTERVAL_MS);
-        })();
-    </script>
+    // ── Online/offline ───────────────────────────────────────────
+    window.addEventListener('online',  () => { setStatus('🌐 Internet tiklandi', 'text-blue-400'); setTimeout(sendNow, 300); });
+    window.addEventListener('offline', () => setStatus('📴 Internet yo\'q — saqlanmoqda', 'text-amber-400'));
+
+    // ── Ishga tushirish ──────────────────────────────────────────
+    acquireWakeLock();
+    startGPS();
+
+})();
+</script>
 </body>
 </html>
