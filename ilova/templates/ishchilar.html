@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Ishchilar</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen pb-24">
+
+<!-- Yuqori panel -->
+<div class="bg-gray-900 px-4 pt-10 pb-4 sticky top-0 z-50 border-b border-gray-800">
+    <h1 class="text-xl font-bold">👷 Ishchilar</h1>
+    <p class="text-gray-400 text-sm mt-0.5">{{ profillar|length }} ta xodim</p>
+</div>
+
+<!-- Ro'yxat -->
+<div class="px-4 py-4 space-y-3">
+    {% if profillar %}
+        {% for p in profillar %}
+        <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800 flex items-center gap-3">
+            <!-- Avatar -->
+            <div class="w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+                {% if p.rasm %}
+                <img src="{{ p.rasm.url }}" class="w-full h-full object-cover">
+                {% else %}
+                <div class="w-full h-full flex items-center justify-center text-2xl">👤</div>
+                {% endif %}
+            </div>
+            <!-- Info -->
+            <div class="flex-1 min-w-0">
+                <p class="font-semibold truncate">{{ p.ism }}</p>
+                <p class="text-gray-400 text-xs mt-0.5">{{ p.telefon|default:"—" }}</p>
+                <p class="text-gray-600 text-xs">⏰ {{ p.vaqt_boshlanishi|time:"H:i" }} — {{ p.vaqt_yakuni|time:"H:i" }}</p>
+            </div>
+            <!-- Tugmalar -->
+            <div class="flex flex-col gap-2 flex-shrink-0">
+                <a href="{% url 'ishchi_lokatsiya' p.id %}"
+                   class="bg-green-700 text-white text-xs px-3 py-1.5 rounded-xl text-center">🗺</a>
+                <a href="{% url 'ishchi_tahrirlash' p.id %}"
+                   class="bg-gray-700 text-white text-xs px-3 py-1.5 rounded-xl text-center">✏️</a>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="text-center py-20 text-gray-600">
+        <p class="text-5xl mb-3">👷</p>
+        <p>Hali ishchilar yo'q</p>
+        <p class="text-xs mt-2 text-gray-700">Admin panel: <a href="/admin/" class="text-blue-500">/admin/</a></p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Pastki navigatsiya -->
+<div class="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 flex z-50">
+    <a href="{% url 'ishchilar' %}" class="flex-1 flex flex-col items-center py-3 text-blue-400">
+        <span class="text-xl">👷</span>
+        <span class="text-xs mt-0.5">Ishchilar</span>
+    </a>
+    <a href="{% url 'jarima' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">⚖️</span>
+        <span class="text-xs mt-0.5">Jarima</span>
+    </a>
+    <a href="{% url 'zona' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">📍</span>
+        <span class="text-xs mt-0.5">Zonalar</span>
+    </a>
+    <a href="{% url 'dashboard' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">🌍</span>
+        <span class="text-xs mt-0.5">Xarita</span>
+    </a>
+    <a href="{% url 'logout' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">🚪</span>
+        <span class="text-xs mt-0.5">Chiqish</span>
+    </a>
+</div>
+
+</body>
+</html>

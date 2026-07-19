@@ -32,10 +32,34 @@ class FoydalanuvchiProfil(models.Model):
         return self.ism or self.user.username
 
 
+class IshZonasi(models.Model):
+    """Ish zonasi — xaritada belgilangan polygon yoki markaz + radius"""
+    nomi = models.CharField(max_length=100, verbose_name='Zona nomi')
+    markaz_lat = models.DecimalField(max_digits=9, decimal_places=6, verbose_name='Markaz (Lat)')
+    markaz_lng = models.DecimalField(max_digits=10, decimal_places=6, verbose_name='Markaz (Lng)')
+    radius_metr = models.PositiveIntegerField(default=200, verbose_name='Radius (metr)')
+    yaratildi = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.nomi
+
+
+class IshchiZona(models.Model):
+    """Qaysi ishchi qaysi zona bilan bog'liq"""
+    profil = models.ForeignKey(FoydalanuvchiProfil, on_delete=models.CASCADE, related_name='zonalari')
+    zona = models.ForeignKey(IshZonasi, on_delete=models.CASCADE, related_name='ishchilar')
+
+    class Meta:
+        unique_together = ('profil', 'zona')
+
+    def __str__(self):
+        return f"{self.profil.ism} → {self.zona.nomi}"
+
+
 class Davomat(models.Model):
     STATUS_CHOICES = [
-        ('keldi', 'Keldi / Kuzatish shartmas'),
-        ('kelmadi', 'Kelmagan / Qidirilmoqda'),
+        ('keldi', 'Keldi'),
+        ('kelmadi', 'Kelmagan'),
     ]
     profil = models.ForeignKey(FoydalanuvchiProfil, on_delete=models.CASCADE, related_name='davomatlari')
     sana = models.DateField(auto_now_add=True)
@@ -56,3 +80,20 @@ class HarakatTarixi(models.Model):
 
     def __str__(self):
         return f'{self.profil.ism} @ {self.vaqt}'
+
+
+class JarimaMukofot(models.Model):
+    TURI_CHOICES = [
+        ('jarima', 'Jarima'),
+        ('mukofot', 'Mukofot'),
+    ]
+    profil = models.ForeignKey(FoydalanuvchiProfil, on_delete=models.CASCADE, related_name='jarima_mukofotlar')
+    turi = models.CharField(max_length=10, choices=TURI_CHOICES)
+    miqdor = models.PositiveIntegerField(verbose_name="Miqdor (so'm)")
+    sabab = models.TextField(verbose_name='Sabab')
+    avtomatik = models.BooleanField(default=False, verbose_name='Avtomatik (geofence)')
+    sana = models.DateField(auto_now_add=True)
+    yaratdi = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Kim qo\'shdi')
+
+    def __str__(self):
+        return f"{self.profil.ism} — {self.turi} — {self.miqdor:,} so'm"

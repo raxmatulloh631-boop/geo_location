@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Ish zonalari</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #map { width: 100%; height: 55vw; min-height: 220px; max-height: 320px; }
+    </style>
+</head>
+<body class="bg-gray-950 text-white min-h-screen pb-24">
+
+<!-- Yuqori panel -->
+<div class="bg-gray-900 px-4 pt-10 pb-4 sticky top-0 z-50 border-b border-gray-800">
+    <h1 class="text-xl font-bold">📍 Ish zonalari</h1>
+</div>
+
+<!-- Tab -->
+<div class="flex bg-gray-900 border-b border-gray-800 sticky top-[72px] z-40">
+    <button onclick="showTab('qosh')" id="tab-qosh"
+        class="flex-1 py-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-500">
+        ➕ Qo'shish
+    </button>
+    <button onclick="showTab('list')" id="tab-list"
+        class="flex-1 py-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent">
+        📋 Zonalar ({{ zonalar|length }})
+    </button>
+</div>
+
+<!-- Zona qo'shish -->
+<div id="panel-qosh" class="px-4 py-4 space-y-4">
+    <p class="text-gray-400 text-sm">Xaritaga bosing — markaz o'rnatiladi</p>
+
+    <!-- Xarita -->
+    <div class="rounded-2xl overflow-hidden border border-gray-700">
+        <div id="map"></div>
+    </div>
+
+    <!-- Tanlangan nuqta -->
+    <div id="tanlangan-info" class="hidden bg-blue-900/30 border border-blue-700 rounded-xl px-4 py-3">
+        <p class="text-blue-300 text-xs">Tanlangan nuqta:</p>
+        <p id="tanlangan-coord" class="font-mono text-sm text-white mt-0.5"></p>
+    </div>
+
+    <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800 space-y-3">
+        <div>
+            <label class="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Zona nomi</label>
+            <input type="text" id="zona-nomi" placeholder="Ofis, Ombor, Zavod..."
+                class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 text-base">
+        </div>
+        <div>
+            <label class="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Radius (metr)</label>
+            <input type="number" id="zona-radius" value="200" min="50" max="5000"
+                class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 text-base">
+        </div>
+    </div>
+
+    <p id="zona-xato" class="text-red-400 text-sm hidden px-1"></p>
+
+    <button onclick="zonaQosh()"
+        class="w-full bg-blue-600 active:bg-blue-700 text-white font-bold py-4 rounded-2xl text-base">
+        💾 Zonani saqlash
+    </button>
+</div>
+
+<!-- Zonalar ro'yxati -->
+<div id="panel-list" class="px-4 py-4 space-y-3 hidden">
+    {% if zonalar %}
+        {% for z in zonalar %}
+        <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800 flex items-center gap-3">
+            <div class="flex-1 min-w-0">
+                <p class="font-semibold">{{ z.nomi }}</p>
+                <p class="text-gray-500 text-xs mt-0.5 font-mono truncate">{{ z.markaz_lat }}, {{ z.markaz_lng }}</p>
+                <p class="text-blue-400 text-xs mt-0.5">⭕ {{ z.radius_metr }} m</p>
+            </div>
+            <a href="{% url 'zona_ochir' z.id %}"
+                onclick="return confirm('Zonani o\'chirasizmi?')"
+                class="text-gray-600 active:text-red-400 text-2xl p-1 flex-shrink-0">🗑</a>
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="text-center py-16 text-gray-600">
+        <p class="text-4xl mb-3">🗺</p>
+        <p>Hali zona belgilanmagan</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Pastki nav -->
+<div class="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 flex z-50">
+    <a href="{% url 'ishchilar' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">👷</span><span class="text-xs mt-0.5">Ishchilar</span>
+    </a>
+    <a href="{% url 'jarima' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">⚖️</span><span class="text-xs mt-0.5">Jarima</span>
+    </a>
+    <a href="{% url 'zona' %}" class="flex-1 flex flex-col items-center py-3 text-blue-400">
+        <span class="text-xl">📍</span><span class="text-xs mt-0.5">Zonalar</span>
+    </a>
+    <a href="{% url 'dashboard' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">🌍</span><span class="text-xs mt-0.5">Xarita</span>
+    </a>
+    <a href="{% url 'logout' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">🚪</span><span class="text-xs mt-0.5">Chiqish</span>
+    </a>
+</div>
+
+<script>
+let selectedLat = null, selectedLng = null;
+let clickMark = null, circleObj = null;
+
+const map = L.map('map').setView([41.311081, 69.240562], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+{% for z in zonalar %}
+L.circle([{{ z.markaz_lat }}, {{ z.markaz_lng }}], {
+    radius: {{ z.radius_metr }}, color: '#4f6ef7', fillColor: '#4f6ef733', fillOpacity: 1, weight: 2
+}).addTo(map).bindPopup('{{ z.nomi }}');
+{% endfor %}
+
+map.on('click', function(e) {
+    selectedLat = e.latlng.lat;
+    selectedLng = e.latlng.lng;
+    document.getElementById('tanlangan-info').classList.remove('hidden');
+    document.getElementById('tanlangan-coord').innerText =
+        selectedLat.toFixed(6) + ', ' + selectedLng.toFixed(6);
+    const r = parseInt(document.getElementById('zona-radius').value) || 200;
+    if (clickMark) map.removeLayer(clickMark);
+    if (circleObj) map.removeLayer(circleObj);
+    clickMark = L.marker([selectedLat, selectedLng]).addTo(map);
+    circleObj = L.circle([selectedLat, selectedLng], {
+        radius: r, color: '#22c55e', fillColor: '#22c55e22', fillOpacity: 1, weight: 2
+    }).addTo(map);
+});
+
+document.getElementById('zona-radius').addEventListener('input', function() {
+    if (circleObj && selectedLat) {
+        map.removeLayer(circleObj);
+        circleObj = L.circle([selectedLat, selectedLng], {
+            radius: parseInt(this.value) || 200,
+            color: '#22c55e', fillColor: '#22c55e22', fillOpacity: 1, weight: 2
+        }).addTo(map);
+    }
+});
+
+function getCsrf() {
+    const m = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[2]) : '';
+}
+
+function zonaQosh() {
+    const nomi = document.getElementById('zona-nomi').value.trim();
+    const radius = parseInt(document.getElementById('zona-radius').value) || 200;
+    const xatoEl = document.getElementById('zona-xato');
+    if (!nomi)        { xatoEl.innerText = 'Zona nomini kiriting!'; xatoEl.classList.remove('hidden'); return; }
+    if (!selectedLat) { xatoEl.innerText = 'Xaritada nuqta tanlang!'; xatoEl.classList.remove('hidden'); return; }
+    xatoEl.classList.add('hidden');
+    fetch('{% url "api_zona_saqlash" %}', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+        body: JSON.stringify({ nomi, lat: selectedLat, lng: selectedLng, radius })
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.id) window.location.reload();
+        else { xatoEl.innerText = d.error || 'Xatolik'; xatoEl.classList.remove('hidden'); }
+    })
+    .catch(() => { xatoEl.innerText = 'Server xatosi'; xatoEl.classList.remove('hidden'); });
+}
+
+function showTab(tab) {
+    document.getElementById('panel-qosh').classList.toggle('hidden', tab !== 'qosh');
+    document.getElementById('panel-list').classList.toggle('hidden', tab !== 'list');
+    document.getElementById('tab-qosh').className = 'flex-1 py-3 text-sm font-semibold border-b-2 ' +
+        (tab === 'qosh' ? 'text-blue-400 border-blue-500' : 'text-gray-500 border-transparent');
+    document.getElementById('tab-list').className = 'flex-1 py-3 text-sm font-semibold border-b-2 ' +
+        (tab === 'list' ? 'text-blue-400 border-blue-500' : 'text-gray-500 border-transparent');
+    if (tab === 'qosh') setTimeout(() => map.invalidateSize(), 100);
+}
+</script>
+</body>
+</html>

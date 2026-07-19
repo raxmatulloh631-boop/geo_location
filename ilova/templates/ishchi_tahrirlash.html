@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Tahrirlash</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen pb-10">
+
+<!-- Yuqori panel -->
+<div class="bg-gray-900 px-4 pt-10 pb-4 flex items-center gap-3 border-b border-gray-800 sticky top-0 z-50">
+    <a href="{% url 'ishchilar' %}" class="text-gray-400 text-2xl leading-none">‹</a>
+    <div>
+        <h1 class="text-lg font-bold leading-tight">Tahrirlash</h1>
+        <p class="text-gray-400 text-xs">{{ profil.ism }}</p>
+    </div>
+</div>
+
+<div class="px-4 py-5">
+
+    <!-- Avatar -->
+    <div class="flex items-center gap-3 mb-6 bg-gray-900 rounded-2xl p-4 border border-gray-800">
+        <div class="w-14 h-14 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+            {% if profil.rasm %}
+            <img src="{{ profil.rasm.url }}" class="w-full h-full object-cover">
+            {% else %}
+            <div class="w-full h-full flex items-center justify-center text-3xl">👤</div>
+            {% endif %}
+        </div>
+        <div>
+            <p class="font-bold">{{ profil.ism }}</p>
+            <p class="text-gray-500 text-sm">@{{ profil.user.username }}</p>
+        </div>
+    </div>
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        <!-- Ism -->
+        <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <label class="text-xs text-gray-500 uppercase tracking-wide">Ismi familyasi</label>
+            <input type="text" name="ism" value="{{ profil.ism }}"
+                class="w-full bg-transparent text-white text-base mt-1 focus:outline-none border-b border-gray-700 focus:border-blue-500 pb-1 transition">
+        </div>
+
+        <!-- Telefon -->
+        <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <label class="text-xs text-gray-500 uppercase tracking-wide">Telefon</label>
+            <input type="tel" name="telefon" value="{{ profil.telefon }}" placeholder="+998901234567"
+                class="w-full bg-transparent text-white text-base mt-1 focus:outline-none border-b border-gray-700 focus:border-blue-500 pb-1 transition">
+        </div>
+
+        <!-- Ish vaqti -->
+        <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <label class="text-xs text-gray-500 uppercase tracking-wide mb-3 block">⏰ Ish vaqti</label>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <p class="text-xs text-gray-600 mb-1">Boshlanish</p>
+                    <input type="time" name="vaqt_boshlanishi"
+                        value="{{ profil.vaqt_boshlanishi|time:'H:i' }}"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition text-base">
+                </div>
+                <div>
+                    <p class="text-xs text-gray-600 mb-1">Tugash</p>
+                    <input type="time" name="vaqt_yakuni"
+                        value="{{ profil.vaqt_yakuni|time:'H:i' }}"
+                        class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-blue-500 transition text-base">
+                </div>
+            </div>
+        </div>
+
+        <!-- Ish zonalari -->
+        <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <label class="text-xs text-gray-500 uppercase tracking-wide mb-3 block">📍 Ish zonalari</label>
+            {% if zonalar %}
+            <div class="space-y-2">
+                {% for zona in zonalar %}
+                <label class="flex items-center gap-3 p-3 bg-gray-800 rounded-xl cursor-pointer active:bg-gray-700">
+                    <input type="checkbox" name="zonalar" value="{{ zona.id }}"
+                        {% if zona.id in tanlangan_zonalar %}checked{% endif %}
+                        class="w-5 h-5 rounded accent-blue-500 flex-shrink-0">
+                    <div>
+                        <p class="text-sm font-medium">{{ zona.nomi }}</p>
+                        <p class="text-gray-500 text-xs">⭕ {{ zona.radius_metr }} m</p>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-4 text-gray-600">
+                <p class="text-sm">Zona belgilanmagan</p>
+                <a href="{% url 'zona' %}" class="text-blue-400 text-sm underline mt-1 inline-block">Zona qo'shish →</a>
+            </div>
+            {% endif %}
+        </div>
+
+        <button type="submit"
+            class="w-full bg-blue-600 active:bg-blue-700 text-white font-bold py-4 rounded-2xl text-base">
+            💾 Saqlash
+        </button>
+    </form>
+</div>
+</body>
+</html>

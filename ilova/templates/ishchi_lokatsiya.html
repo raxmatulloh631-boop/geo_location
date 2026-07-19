@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>{{ profil.ism }} — Lokatsiya</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        html, body { height: 100%; margin: 0; }
+        #map { width: 100%; height: calc(100vh - 120px); }
+        @keyframes p { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(1.2)} }
+        .pulse { animation: p 1.5s infinite; }
+    </style>
+</head>
+<body class="bg-gray-950 text-white flex flex-col h-screen overflow-hidden">
+
+<!-- Nav -->
+<div class="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center gap-3 flex-shrink-0">
+    <a href="{% url 'ishchilar' %}" class="text-gray-400 text-xl w-8 flex-shrink-0">←</a>
+    <div class="flex items-center gap-2 flex-1 min-w-0">
+        <div class="w-9 h-9 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+            {% if profil.rasm %}
+            <img src="{{ profil.rasm.url }}" class="w-full h-full object-cover">
+            {% else %}
+            <div class="w-full h-full flex items-center justify-center">👤</div>
+            {% endif %}
+        </div>
+        <div class="min-w-0">
+            <p class="font-semibold text-sm truncate">{{ profil.ism }}</p>
+            <p class="text-gray-400 text-xs">{{ profil.telefon }}</p>
+        </div>
+    </div>
+    <div class="flex items-center gap-1.5 flex-shrink-0">
+        <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-gray-500 flex-shrink-0"></span>
+        <span id="status-text" class="text-gray-400 text-xs">...</span>
+    </div>
+</div>
+
+<!-- Xarita -->
+<div id="map" class="flex-1"></div>
+
+<!-- Pastki info panel -->
+<div class="bg-gray-900 border-t border-gray-800 px-4 py-3 flex items-center justify-between flex-shrink-0">
+    <div>
+        <p id="coord-text" class="text-gray-400 font-mono text-xs">—</p>
+        <p id="last-time" class="text-gray-600 text-xs mt-0.5">So'nggi: —</p>
+    </div>
+    <button onclick="markerGa()" class="bg-blue-600 active:bg-blue-700 text-white text-xs font-medium px-3 py-2 rounded-xl">
+        🎯 Markaz
+    </button>
+</div>
+
+<script>
+const PROFIL_ID = {{ profil.id }};
+const API_URL   = '/api/ishchi/' + PROFIL_ID + '/lokatsiya/';
+
+const map = L.map('map', { zoomControl: false }).setView([41.311081, 69.240562], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+const style = document.createElement('style');
+style.innerText = '@keyframes mp{0%{box-shadow:0 0 0 0 rgba(34,197,94,0.6)}70%{box-shadow:0 0 0 14px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}} .micon{animation:mp 2s infinite}';
+document.head.appendChild(style);
+
+const icon = L.divIcon({
+    className: '',
+    html: '<div class="micon" style="width:44px;height:44px;border-radius:50%;background:#1e3a5f;border:3px solid #22c55e;display:flex;align-items:center;justify-content:center;font-size:20px;">📍</div>',
+    iconSize: [44, 44], iconAnchor: [22, 22]
+});
+
+let marker = null, firstLoad = true, lastLat = null, lastLng = null;
+
+function markerGa() {
+    if (lastLat) map.setView([lastLat, lastLng], 17, { animate: true });
+}
+
+function yangilash() {
+    fetch(API_URL, { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(d => {
+            const dot = document.getElementById('status-dot');
+            const stEl = document.getElementById('status-text');
+            if (d.onlayn) {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-green-500 flex-shrink-0 pulse';
+                stEl.className = 'text-green-400 text-xs';
+                stEl.innerText = '🟢 Onlayn';
+            } else {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0';
+                stEl.className = 'text-red-400 text-xs';
+                stEl.innerText = '🔴 Oflayn';
+            }
+            document.getElementById('last-time').innerText = 'So\'nggi: ' + (d.vaqt || '—');
+            if (d.lat && d.lng) {
+                lastLat = d.lat; lastLng = d.lng;
+                document.getElementById('coord-text').innerText =
+                    parseFloat(d.lat).toFixed(5) + ', ' + parseFloat(d.lng).toFixed(5);
+                if (marker) {
+                    marker.setLatLng([d.lat, d.lng]);
+                } else {
+                    marker = L.marker([d.lat, d.lng], { icon })
+                        .addTo(map).bindPopup('<b>' + d.ism + '</b>');
+                }
+                if (firstLoad) { map.setView([d.lat, d.lng], 17); firstLoad = false; }
+            }
+        }).catch(() => {});
+}
+
+yangilash();
+setInterval(yangilash, 1000);
+</script>
+</body>
+</html>

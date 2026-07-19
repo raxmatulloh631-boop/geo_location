@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Jarima / Mukofot</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen pb-24">
+
+<!-- Yuqori panel -->
+<div class="bg-gray-900 px-4 pt-10 pb-4 sticky top-0 z-50 border-b border-gray-800">
+    <h1 class="text-xl font-bold">⚖️ Jarima / Mukofot</h1>
+    <p class="text-gray-400 text-sm mt-0.5">{{ yozuvlar|length }} ta yozuv</p>
+</div>
+
+<!-- Tab -->
+<div id="tabs" class="flex bg-gray-900 border-b border-gray-800 sticky top-[72px] z-40">
+    <button onclick="showTab('qosh')" id="tab-qosh"
+        class="flex-1 py-3 text-sm font-semibold text-blue-400 border-b-2 border-blue-500">
+        ➕ Qo'shish
+    </button>
+    <button onclick="showTab('tarix')" id="tab-tarix"
+        class="flex-1 py-3 text-sm font-semibold text-gray-500 border-b-2 border-transparent">
+        📋 Tarix
+    </button>
+</div>
+
+<!-- Qo'shish tab -->
+<div id="panel-qosh" class="px-4 py-5">
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        <!-- Ishchi -->
+        <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <label class="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Ishchi</label>
+            <select name="profil_id" required
+                class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 text-base">
+                <option value="">— Tanlang —</option>
+                {% for p in profillar %}
+                <option value="{{ p.id }}">{{ p.ism }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Turi -->
+        <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <label class="text-xs text-gray-500 uppercase tracking-wide mb-3 block">Turi</label>
+            <div class="grid grid-cols-2 gap-3">
+                <label class="flex items-center justify-center gap-2 p-3 bg-gray-800 rounded-xl cursor-pointer border-2 border-transparent has-[:checked]:border-red-500 has-[:checked]:bg-red-950/30 active:bg-gray-700">
+                    <input type="radio" name="turi" value="jarima" required class="hidden">
+                    <span class="font-semibold">🚫 Jarima</span>
+                </label>
+                <label class="flex items-center justify-center gap-2 p-3 bg-gray-800 rounded-xl cursor-pointer border-2 border-transparent has-[:checked]:border-green-500 has-[:checked]:bg-green-950/30 active:bg-gray-700">
+                    <input type="radio" name="turi" value="mukofot" class="hidden">
+                    <span class="font-semibold">🏆 Mukofot</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Miqdor -->
+        <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <label class="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Miqdor (so'm)</label>
+            <input type="number" name="miqdor" min="0" placeholder="50000" required
+                class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 text-lg font-bold">
+        </div>
+
+        <!-- Sabab -->
+        <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+            <label class="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Sabab</label>
+            <textarea name="sabab" rows="3" placeholder="Sababini yozing..." required
+                class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 resize-none text-base"></textarea>
+        </div>
+
+        <button type="submit"
+            class="w-full bg-blue-600 active:bg-blue-700 text-white font-bold py-4 rounded-2xl text-base">
+            💾 Saqlash
+        </button>
+    </form>
+</div>
+
+<!-- Tarix tab -->
+<div id="panel-tarix" class="px-4 py-4 space-y-3 hidden">
+    {% if yozuvlar %}
+        {% for y in yozuvlar %}
+        <div class="bg-gray-900 rounded-2xl p-4 border {% if y.turi == 'jarima' %}border-red-900/50{% else %}border-green-900/50{% endif %}">
+            <div class="flex items-start justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap mb-1.5">
+                        {% if y.turi == 'jarima' %}
+                        <span class="text-xs bg-red-900/50 text-red-300 px-2 py-0.5 rounded-full">🚫 Jarima</span>
+                        {% else %}
+                        <span class="text-xs bg-green-900/50 text-green-300 px-2 py-0.5 rounded-full">🏆 Mukofot</span>
+                        {% endif %}
+                        {% if y.avtomatik %}
+                        <span class="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">🤖 Auto</span>
+                        {% endif %}
+                    </div>
+                    <p class="font-semibold text-sm">{{ y.profil.ism }}</p>
+                    <p class="text-gray-400 text-xs mt-0.5 leading-relaxed">{{ y.sabab }}</p>
+                    <div class="flex items-center gap-3 mt-2">
+                        <span class="font-bold text-sm {% if y.turi == 'jarima' %}text-red-400{% else %}text-green-400{% endif %}">
+                            {{ y.miqdor|floatformat:0 }} so'm
+                        </span>
+                        <span class="text-gray-600 text-xs">{{ y.sana }}</span>
+                    </div>
+                </div>
+                <a href="{% url 'jarima_ochir' y.id %}"
+                    onclick="return confirm('O\'chirasizmi?')"
+                    class="text-gray-600 active:text-red-400 text-xl flex-shrink-0 p-1">🗑</a>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="text-center py-16 text-gray-600">
+        <p class="text-4xl mb-3">📋</p>
+        <p>Hali yozuvlar yo'q</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Pastki nav -->
+<div class="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 flex z-50">
+    <a href="{% url 'ishchilar' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">👷</span><span class="text-xs mt-0.5">Ishchilar</span>
+    </a>
+    <a href="{% url 'jarima' %}" class="flex-1 flex flex-col items-center py-3 text-blue-400">
+        <span class="text-xl">⚖️</span><span class="text-xs mt-0.5">Jarima</span>
+    </a>
+    <a href="{% url 'zona' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">📍</span><span class="text-xs mt-0.5">Zonalar</span>
+    </a>
+    <a href="{% url 'dashboard' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">🌍</span><span class="text-xs mt-0.5">Xarita</span>
+    </a>
+    <a href="{% url 'logout' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">🚪</span><span class="text-xs mt-0.5">Chiqish</span>
+    </a>
+</div>
+
+<script>
+function showTab(tab) {
+    document.getElementById('panel-qosh').classList.toggle('hidden', tab !== 'qosh');
+    document.getElementById('panel-tarix').classList.toggle('hidden', tab !== 'tarix');
+    document.getElementById('tab-qosh').className = 'flex-1 py-3 text-sm font-semibold border-b-2 ' +
+        (tab === 'qosh' ? 'text-blue-400 border-blue-500' : 'text-gray-500 border-transparent');
+    document.getElementById('tab-tarix').className = 'flex-1 py-3 text-sm font-semibold border-b-2 ' +
+        (tab === 'tarix' ? 'text-blue-400 border-blue-500' : 'text-gray-500 border-transparent');
+}
+</script>
+</body>
+</html>
