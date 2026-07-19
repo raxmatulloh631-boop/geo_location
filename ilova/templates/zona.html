@@ -9,6 +9,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         #map { width: 100%; height: 55vw; min-height: 220px; max-height: 320px; }
+        #qidiruv-natijalar { max-height: 200px; overflow-y: auto; }
     </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen pb-24">
@@ -31,10 +32,30 @@
 </div>
 
 <!-- Zona qo'shish -->
-<div id="panel-qosh" class="px-4 py-4 space-y-4">
-    <p class="text-gray-400 text-sm">Xaritaga bosing — markaz o'rnatiladi</p>
+<div id="panel-qosh" class="px-4 py-4 space-y-3">
+
+    <!-- Qidiruv -->
+    <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+        <label class="text-xs text-gray-500 uppercase tracking-wide mb-2 block">🔍 Manzil qidirish</label>
+        <div class="flex gap-2">
+            <input type="text" id="qidiruv-input" placeholder="Masalan: Yunusobod, Toshkent..."
+                class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 text-base"
+                onkeydown="if(event.key==='Enter'){qidirish()}">
+            <button onclick="qidirish()"
+                class="bg-blue-600 active:bg-blue-700 px-4 py-3 rounded-xl font-bold flex-shrink-0">
+                🔍
+            </button>
+        </div>
+
+        <!-- Natijalar -->
+        <div id="qidiruv-natijalar" class="hidden mt-2 space-y-1 rounded-xl overflow-hidden border border-gray-700">
+        </div>
+        <p id="qidiruv-xato" class="hidden text-red-400 text-xs mt-2"></p>
+        <p id="qidiruv-loading" class="hidden text-gray-400 text-xs mt-2 text-center">Qidirilmoqda...</p>
+    </div>
 
     <!-- Xarita -->
+    <p class="text-gray-400 text-sm px-1">Yoki xaritaga bevosita bosing</p>
     <div class="rounded-2xl overflow-hidden border border-gray-700">
         <div id="map"></div>
     </div>
@@ -42,9 +63,11 @@
     <!-- Tanlangan nuqta -->
     <div id="tanlangan-info" class="hidden bg-blue-900/30 border border-blue-700 rounded-xl px-4 py-3">
         <p class="text-blue-300 text-xs">Tanlangan nuqta:</p>
-        <p id="tanlangan-coord" class="font-mono text-sm text-white mt-0.5"></p>
+        <p id="tanlangan-manzil" class="text-white text-sm font-medium mt-0.5"></p>
+        <p id="tanlangan-coord" class="font-mono text-gray-400 text-xs mt-0.5"></p>
     </div>
 
+    <!-- Zona sozlamalari -->
     <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800 space-y-3">
         <div>
             <label class="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Zona nomi</label>
@@ -111,6 +134,7 @@
 <script>
 let selectedLat = null, selectedLng = null;
 let clickMark = null, circleObj = null;
+let qidiruвTimer = null;
 
 const map = L.map('map').setView([41.311081, 69.240562], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
@@ -121,21 +145,51 @@ L.circle([{{ z.markaz_lat }}, {{ z.markaz_lng }}], {
 }).addTo(map).bindPopup('{{ z.nomi }}');
 {% endfor %}
 
+// Xaritaga bosish
 map.on('click', function(e) {
-    selectedLat = e.latlng.lat;
-    selectedLng = e.latlng.lng;
-    document.getElementById('tanlangan-info').classList.remove('hidden');
-    document.getElementById('tanlangan-coord').innerText =
-        selectedLat.toFixed(6) + ', ' + selectedLng.toFixed(6);
+    nuqtaOrnatin(e.latlng.lat, e.latlng.lng, null);
+});
+
+function nuqtaOrnatin(lat, lng, manzil) {
+    selectedLat = lat;
+    selectedLng = lng;
+
     const r = parseInt(document.getElementById('zona-radius').value) || 200;
     if (clickMark) map.removeLayer(clickMark);
     if (circleObj) map.removeLayer(circleObj);
-    clickMark = L.marker([selectedLat, selectedLng]).addTo(map);
-    circleObj = L.circle([selectedLat, selectedLng], {
+
+    clickMark = L.marker([lat, lng]).addTo(map);
+    circleObj = L.circle([lat, lng], {
         radius: r, color: '#22c55e', fillColor: '#22c55e22', fillOpacity: 1, weight: 2
     }).addTo(map);
-});
 
+    map.setView([lat, lng], 16, { animate: true });
+
+    // Info panel
+    document.getElementById('tanlangan-info').classList.remove('hidden');
+    document.getElementById('tanlangan-coord').innerText =
+        lat.toFixed(6) + ', ' + lng.toFixed(6);
+
+    if (manzil) {
+        document.getElementById('tanlangan-manzil').innerText = manzil;
+        // Zona nomiga ham avtomatik yoz (bo'sh bo'lsa)
+        const nomaEl = document.getElementById('zona-nomi');
+        if (!nomaEl.value.trim()) nomaEl.value = manzil.split(',')[0].trim();
+    } else {
+        // Teskari geokodlash — koordinatdan manzil olish
+        fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json&accept-language=uz')
+            .then(r => r.json())
+            .then(d => {
+                const m = d.display_name ? d.display_name.split(',').slice(0,2).join(',').trim() : '';
+                document.getElementById('tanlangan-manzil').innerText = m || 'Manzil topilmadi';
+            })
+            .catch(() => {
+                document.getElementById('tanlangan-manzil').innerText = '';
+            });
+    }
+}
+
+// Radius o'zgarganda doirani yangilash
 document.getElementById('zona-radius').addEventListener('input', function() {
     if (circleObj && selectedLat) {
         map.removeLayer(circleObj);
@@ -146,18 +200,77 @@ document.getElementById('zona-radius').addEventListener('input', function() {
     }
 });
 
+// Qidiruv
+function qidirish() {
+    const so = document.getElementById('qidiruv-input').value.trim();
+    if (!so) return;
+
+    const natEl  = document.getElementById('qidiruv-natijalar');
+    const xatoEl = document.getElementById('qidiruv-xato');
+    const loadEl = document.getElementById('qidiruv-loading');
+
+    natEl.classList.add('hidden');
+    xatoEl.classList.add('hidden');
+    loadEl.classList.remove('hidden');
+    natEl.innerHTML = '';
+
+    fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(so) +
+          '&format=json&limit=5&accept-language=uz&countrycodes=uz')
+        .then(r => r.json())
+        .then(results => {
+            loadEl.classList.add('hidden');
+            if (!results.length) {
+                // O'zbekiston bo'yicha topilmasa global qidiruv
+                return fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(so) +
+                             '&format=json&limit=5&accept-language=uz')
+                    .then(r => r.json());
+            }
+            return results;
+        })
+        .then(results => {
+            loadEl.classList.add('hidden');
+            if (!results || !results.length) {
+                xatoEl.innerText = 'Hech narsa topilmadi. Boshqa so\'z bilan urinib ko\'ring.';
+                xatoEl.classList.remove('hidden');
+                return;
+            }
+            natEl.classList.remove('hidden');
+            natEl.innerHTML = results.map((r, i) =>
+                '<button onclick="natijaTanla(' + r.lat + ',' + r.lon + ',\'' +
+                r.display_name.replace(/'/g, "\\'").replace(/\n/g, ' ') + '\')" ' +
+                'class="w-full text-left px-4 py-3 text-sm bg-gray-800 hover:bg-gray-700 active:bg-gray-600 border-b border-gray-700 last:border-0 transition">' +
+                '<span class="text-white">' + r.display_name.split(',').slice(0,2).join(',') + '</span>' +
+                '<span class="text-gray-500 text-xs block mt-0.5">' + r.display_name.split(',').slice(2,4).join(',') + '</span>' +
+                '</button>'
+            ).join('');
+        })
+        .catch(() => {
+            loadEl.classList.add('hidden');
+            xatoEl.innerText = 'Internet xatosi. Qayta urinib ko\'ring.';
+            xatoEl.classList.remove('hidden');
+        });
+}
+
+function natijaTanla(lat, lng, manzil) {
+    document.getElementById('qidiruv-natijalar').classList.add('hidden');
+    document.getElementById('qidiruv-input').value = manzil.split(',')[0].trim();
+    nuqtaOrnatin(parseFloat(lat), parseFloat(lng), manzil.split(',').slice(0,2).join(',').trim());
+}
+
 function getCsrf() {
     const m = document.cookie.match(/(^|;)\s*csrftoken=([^;]+)/);
     return m ? decodeURIComponent(m[2]) : '';
 }
 
 function zonaQosh() {
-    const nomi = document.getElementById('zona-nomi').value.trim();
+    const nomi   = document.getElementById('zona-nomi').value.trim();
     const radius = parseInt(document.getElementById('zona-radius').value) || 200;
     const xatoEl = document.getElementById('zona-xato');
+
     if (!nomi)        { xatoEl.innerText = 'Zona nomini kiriting!'; xatoEl.classList.remove('hidden'); return; }
-    if (!selectedLat) { xatoEl.innerText = 'Xaritada nuqta tanlang!'; xatoEl.classList.remove('hidden'); return; }
+    if (!selectedLat) { xatoEl.innerText = 'Xaritada nuqta tanlang yoki manzil qidiring!'; xatoEl.classList.remove('hidden'); return; }
     xatoEl.classList.add('hidden');
+
     fetch('{% url "api_zona_saqlash" %}', {
         method: 'POST', credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
