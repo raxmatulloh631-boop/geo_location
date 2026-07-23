@@ -5,176 +5,170 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nazorat Paneli</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"/>
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
     <style>
-        html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; }
-        .avatar-marker {
-            border-radius: 50%;
-            background: white;
-            overflow: hidden;
-            box-shadow: 0 0 8px rgba(0,0,0,0.5);
-        }
-        .avatar-marker.online  { border: 3px solid #22c55e; }
-        .avatar-marker.offline { border: 3px solid #ef4444; }
-        .avatar-marker img { width: 100%; height: 100%; object-fit: cover; }
-
-        /* Yurish animatsiyasi — online bo'lsa */
-        @keyframes markerPulse {
-            0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.6); }
-            70%  { box-shadow: 0 0 0 10px rgba(34,197,94,0); }
-            100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
-        }
-        .avatar-marker.online { animation: markerPulse 2s infinite; }
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+        #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .maplibregl-ctrl-group { background: rgba(17,24,39,0.9) !important; border: 1px solid #374151 !important; }
+        .maplibregl-ctrl-group button { background: transparent !important; }
+        .maplibregl-ctrl-group button span { filter: invert(1); }
+        .worker-marker { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; cursor: pointer; transition: transform 0.2s; }
+        .worker-marker:hover { transform: scale(1.15); }
+        .worker-marker.online  { border: 3px solid #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,0.5); animation: pulse 2s infinite; }
+        .worker-marker.offline { border: 3px solid #ef4444; }
+        .worker-marker img { width: 100%; height: 100%; object-fit: cover; }
+        .worker-marker .avatar-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20px; background: #374151; }
+        @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)} 70%{box-shadow:0 0 0 10px rgba(34,197,94,0)} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0)} }
     </style>
 </head>
-<body class="relative bg-gray-100 font-sans overflow-hidden">
+<body>
+<div id="map"></div>
 
-    <!-- Sidebar -->
-    <div id="sidebar" class="absolute top-0 left-0 h-full w-72 bg-gray-900 text-white z-[999] transform -translate-x-full transition-transform duration-300 flex flex-col shadow-2xl">
-        <div class="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-950">
-            <div>
-                <h2 id="sidebar-title" class="text-xl font-bold tracking-wide">Ishchilar</h2>
-                <p id="worker-count" class="text-xs text-gray-400 mt-0.5">0 ta faol</p>
-            </div>
-            <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white text-2xl font-bold p-1">&times;</button>
+<!-- Sidebar -->
+<div id="sidebar" class="absolute top-0 left-0 h-full w-72 bg-gray-900/95 backdrop-blur text-white z-[999] transform -translate-x-full transition-transform duration-300 flex flex-col shadow-2xl">
+    <div class="p-4 border-b border-gray-800 flex justify-between items-center">
+        <div>
+            <h2 class="text-lg font-bold">Ishchilar</h2>
+            <p id="worker-count" class="text-xs text-gray-400 mt-0.5">0 ta onlayn</p>
         </div>
-        <div id="user-list" class="flex-1 overflow-y-auto p-2 space-y-2"></div>
-        <div class="p-3 border-t border-gray-800 space-y-2">
-            <div id="last-update" class="text-center text-xs text-gray-600">—</div>
-            <a href="{% url 'logout' %}" class="block text-center text-sm text-gray-400 hover:text-white">Chiqish</a>
-        </div>
+        <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white text-2xl p-1">&times;</button>
     </div>
+    <div id="user-list" class="flex-1 overflow-y-auto p-2 space-y-2"></div>
+    <div class="p-3 border-t border-gray-800 space-y-2">
+        <div id="last-update" class="text-center text-xs text-gray-600">—</div>
+        <a href="{% url 'ishchilar' %}" class="block text-center text-sm text-gray-400 hover:text-white">← Bosh sahifa</a>
+        <a href="{% url 'logout' %}" class="block text-center text-sm text-gray-500 hover:text-red-400">Chiqish</a>
+    </div>
+</div>
 
-    <!-- Ro'yxat tugmasi -->
-    <button onclick="toggleSidebar()" class="absolute top-4 left-4 bg-gray-900 text-white px-4 py-2.5 rounded-xl font-medium shadow-md hover:bg-gray-800 transition z-[998] flex items-center gap-2">
-        ☰ <span id="btn-text">Ishchilar</span>
+<!-- Yuqori tugmalar -->
+<div class="absolute top-4 left-4 z-[998] flex items-center gap-2">
+    <button onclick="toggleSidebar()" class="bg-gray-900/90 backdrop-blur text-white px-4 py-2.5 rounded-xl font-medium shadow-md flex items-center gap-2 text-sm">
+        ☰
         <span id="online-badge" class="bg-green-500 text-white text-xs rounded-full px-1.5 py-0.5 hidden">0</span>
     </button>
+</div>
 
-    <!-- Xarita -->
-    <div id="map"></div>
+<!-- Xarita turi -->
+<div class="absolute top-4 right-4 z-[998] bg-gray-900/90 backdrop-blur rounded-xl overflow-hidden shadow-md">
+    <button onclick="setStyle('bright')" id="btn-bright"
+        class="px-3 py-2 text-xs font-medium text-blue-400 border-b border-gray-700 block w-full text-left">🗺 Ko'cha</button>
+    <button onclick="setStyle('satellite')" id="btn-satellite"
+        class="px-3 py-2 text-xs font-medium text-gray-400 block w-full text-left">🛰 Satellit</button>
+    <button onclick="setStyle('topo')" id="btn-topo"
+        class="px-3 py-2 text-xs font-medium text-gray-400 block w-full text-left">🏔 Topografik</button>
+</div>
 
-    <script>
-        var map = L.map('map', { zoomControl: false }).setView([41.311081, 69.240562], 12);
-        L.control.zoom({ position: 'bottomright' }).addTo(map);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+<script>
+const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://tiles.openfreemap.org/styles/bright',
+    center: [69.240562, 41.311081],
+    zoom: 12,
+    attributionControl: false
+});
+map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
-        var markers = {};      // { id: L.marker }
-        var workerData = {};   // { id: {...} } — oxirgi ma'lumot
+const styles = {
+    bright:    'https://tiles.openfreemap.org/styles/bright',
+    satellite: 'https://tiles.openfreemap.org/styles/satellite',
+    topo:      'https://tiles.openfreemap.org/styles/topo',
+};
+let activeStyle = 'bright';
 
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('-translate-x-full');
-        }
+function setStyle(name) {
+    if (activeStyle === name) return;
+    activeStyle = name;
+    map.setStyle(styles[name]);
+    ['bright','satellite','topo'].forEach(n => {
+        const btn = document.getElementById('btn-' + n);
+        btn.className = 'px-3 py-2 text-xs font-medium block w-full text-left ' +
+            (n === name ? 'text-blue-400' : 'text-gray-400') +
+            (n !== 'topo' ? ' border-b border-gray-700' : '');
+    });
+}
 
-        function timeStr() {
-            const d = new Date();
-            return String(d.getHours()).padStart(2,'0') + ':' +
-                   String(d.getMinutes()).padStart(2,'0') + ':' +
-                   String(d.getSeconds()).padStart(2,'0');
-        }
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('-translate-x-full');
+}
 
-        async function yuklash() {
-            try {
-                const res = await fetch('{% url "api_map_data" %}', { credentials: 'same-origin' });
-                if (res.status === 401 || res.status === 403) {
-                    window.location.href = '{% url "login" %}';
-                    return;
-                }
-                const data = await res.json();
+function timeStr() {
+    const d = new Date();
+    return [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2,'0')).join(':');
+}
 
-                const rejim = data.rejim || 'biznes';
-                const title = rejim === 'talim' ? 'Kelmaganlar' : 'Ishchilar';
-                document.getElementById('sidebar-title').innerText = title;
-                document.getElementById('btn-text').innerText = title;
+const markers = {};
 
-                const workers = data.majliz || [];
-                const seenIds = {};
-                let onlineCount = 0;
-                let listHtml = '';
+async function yuklash() {
+    try {
+        const res = await fetch('{% url "api_map_data" %}', { credentials: 'same-origin' });
+        if (res.status === 401 || res.status === 403) { window.location.href = '{% url "login" %}'; return; }
+        const data = await res.json();
+        const workers = data.majliz || [];
+        const seenIds = {};
+        let onlineCount = 0;
+        let listHtml = '';
 
-                workers.forEach(function (p) {
-                    seenIds[p.id] = true;
-                    workerData[p.id] = p;
+        workers.forEach(p => {
+            seenIds[p.id] = true;
+            const isOnline = p.aloqa === 'onlayn';
+            if (isOnline) onlineCount++;
 
-                    const isOnline = p.aloqa === 'onlayn';
-                    if (isOnline) onlineCount++;
-
-                    // Marker yangilash yoki yaratish
-                    if (p.lat != null && p.lng != null) {
-                        const cls = 'avatar-marker ' + (isOnline ? 'online' : 'offline');
-                        const html = '<img src="' + p.rasm + '" alt="" />';
-                        const popup = '<b>' + p.ism + '</b><br>Tel: ' + p.telefon +
-                                      '<br>Holat: <span style="color:' + (isOnline ? '#22c55e' : '#ef4444') + '">' +
-                                      (isOnline ? '🟢 Onlayn' : '🔴 Oflayn') + '</span>';
-
-                        if (markers[p.id]) {
-                            // Koordinatni silliq yangilash
-                            markers[p.id].setLatLng([p.lat, p.lng]);
-                            markers[p.id].setPopupContent(popup);
-                            // Marker rangini yangilash
-                            const el = markers[p.id].getElement();
-                            if (el) el.className = cls;
-                        } else {
-                            const icon = L.divIcon({
-                                className: cls,
-                                html:      html,
-                                iconSize:  [46, 46],
-                                iconAnchor:[23, 23]
-                            });
-                            markers[p.id] = L.marker([p.lat, p.lng], { icon: icon })
-                                .addTo(map)
-                                .bindPopup(popup);
-                        }
-                    }
-
-                    // Sidebar ro'yxat
-                    const dotColor = isOnline ? 'bg-green-500' : 'bg-red-500';
-                    const latLng   = (p.lat != null) ? p.lat + ',' + p.lng : '';
-                    const flyAction = latLng
-                        ? 'map.flyTo([' + p.lat + ',' + p.lng + '],17);toggleSidebar();'
-                        : '';
-                    listHtml +=
-                        '<div onclick="' + flyAction + '" class="p-3 bg-gray-800 hover:bg-gray-700 rounded-xl cursor-pointer transition flex items-center gap-3">' +
-                        '<div class="w-10 h-10 rounded-full overflow-hidden border-2 ' + (isOnline ? 'border-green-500' : 'border-gray-600') + '">' +
-                        '<img src="' + p.rasm + '" class="w-full h-full object-cover" alt="" /></div>' +
-                        '<div class="flex-1">' +
-                        '<h4 class="font-semibold text-sm">' + p.ism + '</h4>' +
-                        '<p class="text-xs text-gray-400">' + p.telefon + '</p>' +
-                        '</div>' +
-                        '<span class="w-3 h-3 rounded-full ' + dotColor + '"></span></div>';
-                });
-
-                // Ko'rinmay qolgan markerlarni o'chirish
-                Object.keys(markers).forEach(function (id) {
-                    if (!seenIds[id]) {
-                        map.removeLayer(markers[id]);
-                        delete markers[id];
-                    }
-                });
-
-                document.getElementById('user-list').innerHTML = listHtml ||
-                    '<p class="text-gray-500 text-sm p-3">Hozircha faol lokatsiya yo\'q</p>';
-
-                document.getElementById('worker-count').innerText = onlineCount + ' ta onlayn';
-                document.getElementById('last-update').innerText = 'Yangilandi: ' + timeStr();
-
-                const badge = document.getElementById('online-badge');
-                if (onlineCount > 0) {
-                    badge.innerText = onlineCount;
-                    badge.classList.remove('hidden');
+            if (p.lat != null && p.lng != null) {
+                if (markers[p.id]) {
+                    markers[p.id].setLngLat([p.lng, p.lat]);
+                    const el = markers[p.id].getElement();
+                    el.className = 'worker-marker ' + (isOnline ? 'online' : 'offline');
                 } else {
-                    badge.classList.add('hidden');
+                    const el = document.createElement('div');
+                    el.className = 'worker-marker ' + (isOnline ? 'online' : 'offline');
+                    if (p.rasm && p.rasm !== '/static/default_avatar.png') {
+                        el.innerHTML = '<img src="' + p.rasm + '" alt=""/>';
+                    } else {
+                        el.innerHTML = '<div class="avatar-fallback">👤</div>';
+                    }
+
+                    const popup = new maplibregl.Popup({ offset: 25, closeButton: false })
+                        .setHTML('<div style="color:#111;padding:4px"><b>' + p.ism + '</b><br><small>' + p.telefon + '</small><br>' +
+                            '<span style="color:' + (isOnline ? '#16a34a' : '#dc2626') + '">' +
+                            (isOnline ? '● Onlayn' : '● Oflayn') + '</span></div>');
+
+                    markers[p.id] = new maplibregl.Marker({ element: el })
+                        .setLngLat([p.lng, p.lat])
+                        .setPopup(popup)
+                        .addTo(map);
                 }
-
-            } catch (err) {
-                console.error('Xatolik:', err);
             }
-        }
 
-        // Har 1 soniyada yangilash
-        setInterval(yuklash, 1000);
-        yuklash();
-    </script>
+            const flyAction = p.lat ? 'map.flyTo({center:[' + p.lng + ',' + p.lat + '],zoom:17});toggleSidebar();' : '';
+            listHtml +=
+                '<div onclick="' + flyAction + '" class="p-3 bg-gray-800 hover:bg-gray-700 rounded-xl cursor-pointer flex items-center gap-3">' +
+                '<div class="w-10 h-10 rounded-full overflow-hidden border-2 flex-shrink-0 ' + (isOnline ? 'border-green-500' : 'border-gray-600') + '">' +
+                (p.rasm && p.rasm !== '/static/default_avatar.png'
+                    ? '<img src="' + p.rasm + '" class="w-full h-full object-cover">'
+                    : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">👤</div>') +
+                '</div><div class="flex-1 min-w-0"><p class="font-semibold text-sm truncate">' + p.ism + '</p>' +
+                '<p class="text-xs text-gray-400">' + p.telefon + '</p></div>' +
+                '<span class="w-2.5 h-2.5 rounded-full flex-shrink-0 ' + (isOnline ? 'bg-green-500' : 'bg-red-500') + '"></span></div>';
+        });
+
+        Object.keys(markers).forEach(id => {
+            if (!seenIds[id]) { markers[id].remove(); delete markers[id]; }
+        });
+
+        document.getElementById('user-list').innerHTML = listHtml ||
+            '<p class="text-gray-500 text-sm p-3">Faol lokatsiya yo\'q</p>';
+        document.getElementById('worker-count').innerText = onlineCount + ' ta onlayn';
+        document.getElementById('last-update').innerText = 'Yangilandi: ' + timeStr();
+        const badge = document.getElementById('online-badge');
+        badge.innerText = onlineCount;
+        badge.classList.toggle('hidden', onlineCount === 0);
+    } catch(e) { console.error(e); }
+}
+
+setInterval(yuklash, 1000);
+map.on('load', yuklash);
+</script>
 </body>
 </html>
