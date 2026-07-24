@@ -8,11 +8,11 @@
     <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"/>
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
     <style>
-        #map { width: 100%; height: 55vw; min-height: 260px; max-height: 360px; }
+        #map { width: 100%; height: 60vw; min-height: 280px; max-height: 380px; }
         .maplibregl-ctrl-group { background: #1f2937 !important; border: 1px solid #374151 !important; }
-        .maplibregl-ctrl-group button { background: #1f2937 !important; }
+        .maplibregl-ctrl-group button { background: transparent !important; }
         .maplibregl-ctrl-group button span { filter: invert(1); }
-        #chizish-panel { touch-action: none; }
+        .maplibregl-ctrl-compass { display: block !important; }
     </style>
 </head>
 <body class="bg-gray-950 text-white min-h-screen pb-24">
@@ -35,45 +35,60 @@
 <!-- Zona qo'shish -->
 <div id="panel-qosh" class="px-4 py-4 space-y-3">
 
-    <!-- Qidiruv -->
-    <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
-        <label class="text-xs text-gray-500 uppercase tracking-wide mb-2 block">🔍 Manzil qidirish</label>
-        <div class="flex gap-2">
-            <input type="text" id="qidiruv-input" placeholder="Yunusobod, Toshkent..."
-                class="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 text-base"
-                onkeydown="if(event.key==='Enter')qidirish()">
-            <button onclick="qidirish()" class="bg-blue-600 active:bg-blue-700 px-4 py-3 rounded-xl font-bold flex-shrink-0">🔍</button>
-        </div>
-        <div id="qidiruv-natijalar" class="hidden mt-2 rounded-xl overflow-hidden border border-gray-700 max-h-48 overflow-y-auto"></div>
-        <p id="qidiruv-xato" class="hidden text-red-400 text-xs mt-2"></p>
-        <p id="qidiruv-loading" class="hidden text-gray-400 text-xs mt-2 text-center">Qidirilmoqda...</p>
+    <!-- Mening jonim + Aylanatirish -->
+    <div class="grid grid-cols-2 gap-3">
+        <button onclick="meningJoyim()"
+            class="bg-blue-600 active:bg-blue-700 text-white font-semibold py-3 px-4 rounded-2xl flex items-center justify-center gap-2 text-sm">
+            📡 Mening joyim
+        </button>
+        <button onclick="xaritaAylantir()"
+            class="bg-gray-800 active:bg-gray-700 border border-gray-700 text-white font-semibold py-3 px-4 rounded-2xl flex items-center justify-center gap-2 text-sm">
+            🧭 Aylanish
+        </button>
     </div>
+    <p id="joylashuv-xato" class="hidden text-red-400 text-xs px-1"></p>
 
     <!-- Chizish turi -->
-    <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800" id="chizish-panel">
+    <div class="bg-gray-900 rounded-2xl p-4 border border-gray-800">
         <label class="text-xs text-gray-500 uppercase tracking-wide mb-3 block">✏️ Zona shakli</label>
         <div class="grid grid-cols-3 gap-2 mb-3">
             <button onclick="chizishBoshlash('polygon')" id="btn-polygon"
-                class="flex flex-col items-center gap-1 p-3 bg-gray-800 border-2 border-blue-500 rounded-xl text-xs font-semibold active:bg-gray-700">
+                class="flex flex-col items-center gap-1 p-3 bg-gray-800 border-2 border-blue-500 rounded-xl text-xs font-semibold">
                 <span class="text-xl">🔷</span> Ko'pburchak
             </button>
             <button onclick="chizishBoshlash('circle')" id="btn-circle"
-                class="flex flex-col items-center gap-1 p-3 bg-gray-800 border-2 border-transparent rounded-xl text-xs font-semibold active:bg-gray-700">
+                class="flex flex-col items-center gap-1 p-3 bg-gray-800 border-2 border-transparent rounded-xl text-xs font-semibold">
                 <span class="text-xl">⭕</span> Doira
             </button>
-            <button onclick="chizishBekor()" id="btn-bekor"
-                class="flex flex-col items-center gap-1 p-3 bg-gray-800 border-2 border-transparent rounded-xl text-xs font-semibold active:bg-gray-700 text-red-400">
+            <button onclick="chizishBekor()" 
+                class="flex flex-col items-center gap-1 p-3 bg-gray-800 border-2 border-transparent rounded-xl text-xs font-semibold text-red-400">
                 <span class="text-xl">🗑</span> Tozalash
             </button>
         </div>
         <p class="text-gray-500 text-xs text-center" id="chizish-yordam">
-            Ko'pburchak: xaritaga bosib burchaklarni belgilang → oxirida birinchi nuqtaga bosing
+            Ko'pburchak: bosib burchaklarni belgilang → birinchi (qizil) nuqtaga bosing yoki 2x bosing
         </p>
     </div>
 
     <!-- Xarita -->
     <div class="rounded-2xl overflow-hidden border border-gray-700">
         <div id="map"></div>
+    </div>
+
+    <!-- Aylanish burchagi -->
+    <div id="aylanish-panel" class="hidden bg-gray-900 rounded-2xl p-4 border border-gray-800">
+        <div class="flex items-center justify-between mb-2">
+            <label class="text-xs text-gray-500 uppercase tracking-wide">🧭 Aylanish burchagi</label>
+            <span id="bearing-val" class="text-blue-400 text-sm font-mono">0°</span>
+        </div>
+        <input type="range" id="bearing-slider" min="-180" max="180" value="0" step="1"
+            class="w-full" oninput="bearingOzgartir(this.value)">
+        <div class="flex justify-between mt-2">
+            <button onclick="bearingOzgartir(-90)" class="text-xs text-gray-400 bg-gray-800 px-3 py-1.5 rounded-lg">← G'arb</button>
+            <button onclick="bearingOzgartir(0)" class="text-xs text-gray-400 bg-gray-800 px-3 py-1.5 rounded-lg">Shimol ↑</button>
+            <button onclick="bearingOzgartir(90)" class="text-xs text-gray-400 bg-gray-800 px-3 py-1.5 rounded-lg">Sharq →</button>
+            <button onclick="bearingOzgartir(180)" class="text-xs text-gray-400 bg-gray-800 px-3 py-1.5 rounded-lg">↓ Janub</button>
+        </div>
     </div>
 
     <!-- Chizilgan info -->
@@ -142,350 +157,258 @@
 </div>
 
 <script>
-// ── MapLibre GL xarita ──────────────────────────────────────────────────────
+// ── MapLibre GL ──────────────────────────────────────────────────────────────
 const map = new maplibregl.Map({
     container: 'map',
     style: 'https://tiles.openfreemap.org/styles/bright',
     center: [69.240562, 41.311081],
     zoom: 13,
+    bearing: 0,
+    pitch: 0,
     attributionControl: false
 });
 
-map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+// Kompas (aylanish ko'rsatgich) qo'shish
+map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-right');
 
-// ── Mavjud zonalarni ko'rsatish ─────────────────────────────────────────────
+// ── Mavjud zonalar ───────────────────────────────────────────────────────────
 map.on('load', function() {
     {% for z in zonalar %}
     (function() {
         {% if z.polygon_coords %}
-        map.addSource('zona-{{ z.id }}', {
-            type: 'geojson',
-            data: {
-                type: 'Feature',
-                geometry: {
-                    type: 'Polygon',
-                    coordinates: [{{ z.polygon_coords|safe }}]
-                }
-            }
-        });
+        map.addSource('zona-{{ z.id }}', { type: 'geojson', data: { type: 'Feature',
+            geometry: { type: 'Polygon', coordinates: [{{ z.polygon_coords|safe }}] } } });
         {% else %}
-        // Doira uchun GeoJSON circle yasash
         const coords = [];
-        const lat = {{ z.markaz_lat }}, lng = {{ z.markaz_lng }}, r = {{ z.radius_metr }};
         for (let i = 0; i <= 64; i++) {
-            const a = (i / 64) * 2 * Math.PI;
-            const dlng = (r / 111320) / Math.cos(lat * Math.PI / 180) * Math.cos(a);
-            const dlat = (r / 111320) * Math.sin(a);
-            coords.push([lng + dlng, lat + dlat]);
+            const a = (i/64)*2*Math.PI;
+            const lat = {{ z.markaz_lat }}, lng = {{ z.markaz_lng }}, r = {{ z.radius_metr }};
+            coords.push([lng + (r/111320)/Math.cos(lat*Math.PI/180)*Math.cos(a), lat + (r/111320)*Math.sin(a)]);
         }
-        map.addSource('zona-{{ z.id }}', {
-            type: 'geojson',
-            data: { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] } }
-        });
+        map.addSource('zona-{{ z.id }}', { type: 'geojson', data: { type: 'Feature',
+            geometry: { type: 'Polygon', coordinates: [coords] } } });
         {% endif %}
-        map.addLayer({ id: 'zona-fill-{{ z.id }}', type: 'fill', source: 'zona-{{ z.id }}',
+        map.addLayer({ id: 'zf-{{ z.id }}', type: 'fill', source: 'zona-{{ z.id }}',
             paint: { 'fill-color': '#4f6ef7', 'fill-opacity': 0.2 } });
-        map.addLayer({ id: 'zona-line-{{ z.id }}', type: 'line', source: 'zona-{{ z.id }}',
+        map.addLayer({ id: 'zl-{{ z.id }}', type: 'line', source: 'zona-{{ z.id }}',
             paint: { 'line-color': '#4f6ef7', 'line-width': 2 } });
-        new maplibregl.Popup({ closeButton: false, closeOnClick: false })
-            .setLngLat([{{ z.markaz_lng }}, {{ z.markaz_lat }}])
-            .setHTML('<b>{{ z.nomi }}</b>')
-            .addTo(map);
     })();
     {% endfor %}
 });
 
-// ── Chizish holati ───────────────────────────────────────────────────────────
-let chizishTuri  = 'polygon';
-let polygonNuqtalar = [];   // [[lng, lat], ...]
-let circleMarkaz = null;
-let savedShape   = null;
+// ── Mening joyim ─────────────────────────────────────────────────────────────
+let meningMarker = null;
 
-// Xaritadagi vaqtinchalik layer ID lar
-const DRAW_SOURCE = 'draw-source';
-const DRAW_FILL   = 'draw-fill';
-const DRAW_LINE   = 'draw-line';
-const DRAW_POINTS = 'draw-points';
+function meningJoyim() {
+    const xatoEl = document.getElementById('joylashuv-xato');
+    xatoEl.classList.add('hidden');
 
-function drawLayerlarOchir() {
-    [DRAW_FILL, DRAW_LINE, DRAW_POINTS].forEach(id => {
-        if (map.getLayer(id)) map.removeLayer(id);
-    });
-    if (map.getSource(DRAW_SOURCE)) map.removeSource(DRAW_SOURCE);
-}
-
-function polygonGeoJSON(nuqtalar) {
-    if (nuqtalar.length < 2) return null;
-    const coords = [...nuqtalar, nuqtalar[0]];
-    return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] } };
-}
-
-function circleGeoJSON(lng, lat, r) {
-    const coords = [];
-    for (let i = 0; i <= 64; i++) {
-        const a = (i / 64) * 2 * Math.PI;
-        const dlng = (r / 111320) / Math.cos(lat * Math.PI / 180) * Math.cos(a);
-        const dlat = (r / 111320) * Math.sin(a);
-        coords.push([lng + dlng, lat + dlat]);
+    if (!navigator.geolocation) {
+        xatoEl.innerText = 'Brauzer GPS ni qo\'llab-quvvatlamaydi';
+        xatoEl.classList.remove('hidden'); return;
     }
-    return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] } };
+
+    navigator.geolocation.getCurrentPosition(
+        function(pos) {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+
+            if (meningMarker) meningMarker.remove();
+
+            const el = document.createElement('div');
+            el.style.cssText = 'width:36px;height:36px;border-radius:50%;background:#3b82f6;' +
+                'border:3px solid white;display:flex;align-items:center;justify-content:center;' +
+                'font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.4);';
+            el.innerText = '👤';
+
+            meningMarker = new maplibregl.Marker({ element: el })
+                .setLngLat([lng, lat])
+                .setPopup(new maplibregl.Popup({ closeButton: false })
+                    .setHTML('<div style="color:#111;padding:4px"><b>Mening joyim</b></div>'))
+                .addTo(map);
+
+            map.flyTo({ center: [lng, lat], zoom: 17, duration: 1000 });
+        },
+        function(err) {
+            xatoEl.innerText = err.code === 1 ? 'GPS ruxsati berilmadi!' : 'Joylashuv topilmadi';
+            xatoEl.classList.remove('hidden');
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+    );
 }
 
-function xaritaYangilash() {
-    drawLayerlarOchir();
-    let geoJson = null;
+// ── Xarita aylanishi ─────────────────────────────────────────────────────────
+let aylanishPanelOchiq = false;
+
+function xaritaAylantir() {
+    aylanishPanelOchiq = !aylanishPanelOchiq;
+    document.getElementById('aylanish-panel').classList.toggle('hidden', !aylanishPanelOchiq);
+    setTimeout(() => map.resize(), 100);
+}
+
+function bearingOzgartir(val) {
+    const v = parseInt(val);
+    document.getElementById('bearing-val').innerText = v + '°';
+    document.getElementById('bearing-slider').value = v;
+    map.easeTo({ bearing: v, duration: 400 });
+}
+
+// Xarita o'zi aylantirilganda slider yangilansin
+map.on('rotate', function() {
+    const b = Math.round(map.getBearing());
+    document.getElementById('bearing-val').innerText = b + '°';
+    document.getElementById('bearing-slider').value = b;
+});
+
+// ── Chizish ──────────────────────────────────────────────────────────────────
+let chizishTuri     = 'polygon';
+let polygonNuqtalar = [];
+let circleMarkaz    = null;
+let savedShape      = null;
+let isDragging      = false;
+let dragStart       = null;
+
+const SRC   = 'draw-src';
+const FILL  = 'draw-fill';
+const LINE  = 'draw-line';
+const PTS   = 'draw-pts';
+const PTSSRC= 'draw-pts-src';
+
+function layerlarOchir() {
+    [FILL, LINE, PTS].forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
+    [SRC, PTSSRC].forEach(id => { if (map.getSource(id)) map.removeSource(id); });
+}
+
+function circleCoords(lng, lat, r) {
+    const c = [];
+    for (let i = 0; i <= 64; i++) {
+        const a = (i/64)*2*Math.PI;
+        c.push([lng + (r/111320)/Math.cos(lat*Math.PI/180)*Math.cos(a), lat + (r/111320)*Math.sin(a)]);
+    }
+    return c;
+}
+
+function xaritaChiz() {
+    layerlarOchir();
+    let geo = null;
 
     if (chizishTuri === 'polygon' && polygonNuqtalar.length >= 2) {
-        geoJson = polygonGeoJSON(polygonNuqtalar);
+        geo = { type:'Feature', geometry:{ type:'Polygon', coordinates:[[...polygonNuqtalar, polygonNuqtalar[0]]] } };
     } else if (chizishTuri === 'circle' && circleMarkaz) {
-        geoJson = circleGeoJSON(circleMarkaz.lng, circleMarkaz.lat, circleMarkaz.r);
+        geo = { type:'Feature', geometry:{ type:'Polygon', coordinates:[circleCoords(circleMarkaz.lng, circleMarkaz.lat, circleMarkaz.r)] } };
     }
+    if (!geo) return;
 
-    if (!geoJson) return;
+    map.addSource(SRC, { type:'geojson', data: geo });
+    map.addLayer({ id:FILL, type:'fill', source:SRC, paint:{ 'fill-color':'#22c55e', 'fill-opacity':0.2 } });
+    map.addLayer({ id:LINE, type:'line', source:SRC, paint:{ 'line-color':'#22c55e', 'line-width':2, 'line-dasharray':[2,1] } });
 
-    map.addSource(DRAW_SOURCE, { type: 'geojson', data: geoJson });
-    map.addLayer({ id: DRAW_FILL, type: 'fill', source: DRAW_SOURCE,
-        paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.2 } });
-    map.addLayer({ id: DRAW_LINE, type: 'line', source: DRAW_SOURCE,
-        paint: { 'line-color': '#22c55e', 'line-width': 2, 'line-dasharray': [2, 1] } });
-
-    // Polygon nuqtalarini ko'rsatish
     if (chizishTuri === 'polygon' && polygonNuqtalar.length > 0) {
-        map.addSource(DRAW_POINTS + '-src', {
-            type: 'geojson',
-            data: {
-                type: 'FeatureCollection',
-                features: polygonNuqtalar.map((p, i) => ({
-                    type: 'Feature',
-                    geometry: { type: 'Point', coordinates: p },
-                    properties: { first: i === 0 }
-                }))
-            }
-        });
-        map.addLayer({ id: DRAW_POINTS, type: 'circle', source: DRAW_POINTS + '-src',
-            paint: {
-                'circle-radius': 5,
-                'circle-color': ['case', ['get', 'first'], '#ef4444', '#22c55e'],
-                'circle-stroke-width': 2,
-                'circle-stroke-color': 'white'
-            }
-        });
+        map.addSource(PTSSRC, { type:'geojson', data:{ type:'FeatureCollection',
+            features: polygonNuqtalar.map((p,i) => ({ type:'Feature',
+                geometry:{ type:'Point', coordinates:p }, properties:{ first: i===0 } })) } });
+        map.addLayer({ id:PTS, type:'circle', source:PTSSRC, paint:{
+            'circle-radius':6, 'circle-stroke-width':2, 'circle-stroke-color':'white',
+            'circle-color':['case',['get','first'],'#ef4444','#22c55e'] } });
     }
 }
 
-// Xaritaga bosish
-let isDragging = false;
-let dragStart  = null;
-let dragRadius = 0;
+// Polygon bosish
+map.on('click', function(e) {
+    if (chizishTuri !== 'polygon') return;
+    if (polygonNuqtalar.length >= 3) {
+        const f = polygonNuqtalar[0];
+        const dx = (e.lngLat.lng-f[0])*111320*Math.cos(f[1]*Math.PI/180);
+        const dy = (e.lngLat.lat-f[1])*111320;
+        if (Math.sqrt(dx*dx+dy*dy) < 25) { polygonYop(); return; }
+    }
+    polygonNuqtalar.push([e.lngLat.lng, e.lngLat.lat]);
+    xaritaChiz();
+    document.getElementById('chizish-yordam').innerText =
+        polygonNuqtalar.length < 3
+            ? polygonNuqtalar.length + ' ta nuqta — kamida 3 ta kerak'
+            : '✅ ' + polygonNuqtalar.length + ' ta nuqta — birinchi (qizil) nuqtaga yoki 2x bosing';
+});
 
+map.on('dblclick', function(e) {
+    if (chizishTuri !== 'polygon' || polygonNuqtalar.length < 3) return;
+    e.preventDefault(); polygonYop();
+});
+
+function polygonYop() {
+    const cx = polygonNuqtalar.reduce((a,p)=>a+p[0],0)/polygonNuqtalar.length;
+    const cy = polygonNuqtalar.reduce((a,p)=>a+p[1],0)/polygonNuqtalar.length;
+    savedShape = { type:'polygon', lat:cy, lng:cx, radius:100, coords: polygonNuqtalar.map(p=>[p[0],p[1]]) };
+    layerlarOchir();
+    map.addSource(SRC, { type:'geojson', data:{ type:'Feature',
+        geometry:{ type:'Polygon', coordinates:[[...polygonNuqtalar, polygonNuqtalar[0]]] } } });
+    map.addLayer({ id:FILL, type:'fill', source:SRC, paint:{ 'fill-color':'#22c55e','fill-opacity':0.25 } });
+    map.addLayer({ id:LINE, type:'line', source:SRC, paint:{ 'line-color':'#22c55e','line-width':2 } });
+    document.getElementById('zona-info').classList.remove('hidden');
+    document.getElementById('zona-info-text').innerText = '🔷 Ko\'pburchak — ' + polygonNuqtalar.length + ' ta burchak';
+    document.getElementById('chizish-yordam').innerText = 'Tayyor! Saqlash uchun pastga skroll qiling.';
+}
+
+// Doira — mouse
 map.on('mousedown', function(e) {
     if (chizishTuri !== 'circle') return;
-    isDragging = true;
-    dragStart  = e.lngLat;
-    dragRadius = 0;
+    isDragging = true; dragStart = e.lngLat;
 });
-
 map.on('mousemove', function(e) {
     if (!isDragging || !dragStart) return;
-    const dlng = e.lngLat.lng - dragStart.lng;
-    const dlat = e.lngLat.lat - dragStart.lat;
-    dragRadius = Math.sqrt(
-        Math.pow(dlng * 111320 * Math.cos(dragStart.lat * Math.PI / 180), 2) +
-        Math.pow(dlat * 111320, 2)
-    );
-    circleMarkaz = { lat: dragStart.lat, lng: dragStart.lng, r: Math.max(50, dragRadius) };
-    xaritaYangilash();
+    const dx = (e.lngLat.lng-dragStart.lng)*111320*Math.cos(dragStart.lat*Math.PI/180);
+    const dy = (e.lngLat.lat-dragStart.lat)*111320;
+    circleMarkaz = { lat:dragStart.lat, lng:dragStart.lng, r:Math.max(30,Math.sqrt(dx*dx+dy*dy)) };
+    xaritaChiz();
 });
-
 map.on('mouseup', function() {
-    if (!isDragging) return;
-    isDragging = false;
-    if (circleMarkaz && circleMarkaz.r > 50) {
-        savedShape = { type: 'circle', lat: circleMarkaz.lat, lng: circleMarkaz.lng, radius: Math.round(circleMarkaz.r), coords: null };
-        const infoEl = document.getElementById('zona-info');
-        infoEl.classList.remove('hidden');
-        document.getElementById('zona-info-text').innerText = '⭕ Doira — radius: ' + Math.round(circleMarkaz.r) + ' m';
-    }
-});
-
-// Touch uchun
-map.on('touchstart', function(e) {
-    if (chizishTuri !== 'circle' || e.originalEvent.touches.length !== 1) return;
-    isDragging = true;
-    dragStart  = e.lngLat;
-});
-
-map.on('touchmove', function(e) {
-    if (!isDragging || !dragStart || e.originalEvent.touches.length !== 1) return;
-    const dlng = e.lngLat.lng - dragStart.lng;
-    const dlat = e.lngLat.lat - dragStart.lat;
-    dragRadius = Math.sqrt(
-        Math.pow(dlng * 111320 * Math.cos(dragStart.lat * Math.PI / 180), 2) +
-        Math.pow(dlat * 111320, 2)
-    );
-    circleMarkaz = { lat: dragStart.lat, lng: dragStart.lng, r: Math.max(50, dragRadius) };
-    xaritaYangilash();
-});
-
-map.on('touchend', function() {
-    if (!isDragging) return;
-    isDragging = false;
-    if (circleMarkaz && circleMarkaz.r > 50) {
-        savedShape = { type: 'circle', lat: circleMarkaz.lat, lng: circleMarkaz.lng, radius: Math.round(circleMarkaz.r), coords: null };
+    if (!isDragging) return; isDragging = false;
+    if (circleMarkaz && circleMarkaz.r > 30) {
+        savedShape = { type:'circle', lat:circleMarkaz.lat, lng:circleMarkaz.lng, radius:Math.round(circleMarkaz.r), coords:null };
         document.getElementById('zona-info').classList.remove('hidden');
         document.getElementById('zona-info-text').innerText = '⭕ Doira — radius: ' + Math.round(circleMarkaz.r) + ' m';
     }
 });
 
-// Polygon uchun bosish
-map.on('click', function(e) {
-    if (chizishTuri !== 'polygon') return;
-
-    // Birinchi nuqtaga yaqin bossami? → yopish
-    if (polygonNuqtalar.length >= 3) {
-        const first = polygonNuqtalar[0];
-        const dx = (e.lngLat.lng - first[0]) * 111320 * Math.cos(first[1] * Math.PI / 180);
-        const dy = (e.lngLat.lat - first[1]) * 111320;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < 20) {
-            polygonYop();
-            return;
-        }
-    }
-
-    polygonNuqtalar.push([e.lngLat.lng, e.lngLat.lat]);
-    xaritaYangilash();
-    document.getElementById('chizish-yordam').innerText =
-        polygonNuqtalar.length < 3
-            ? (polygonNuqtalar.length) + ' ta nuqta — kamida 3 ta kerak'
-            : '✅ ' + polygonNuqtalar.length + ' ta nuqta — tugash uchun birinchi (qizil) nuqtaga bosing';
+// Doira — touch
+map.on('touchstart', function(e) {
+    if (chizishTuri !== 'circle' || e.originalEvent.touches.length !== 1) return;
+    isDragging = true; dragStart = e.lngLat;
 });
-
-// Double click — polygon yopish
-map.on('dblclick', function(e) {
-    if (chizishTuri !== 'polygon' || polygonNuqtalar.length < 3) return;
-    e.preventDefault();
-    polygonYop();
+map.on('touchmove', function(e) {
+    if (!isDragging || !dragStart || e.originalEvent.touches.length !== 1) return;
+    const dx = (e.lngLat.lng-dragStart.lng)*111320*Math.cos(dragStart.lat*Math.PI/180);
+    const dy = (e.lngLat.lat-dragStart.lat)*111320;
+    circleMarkaz = { lat:dragStart.lat, lng:dragStart.lng, r:Math.max(30,Math.sqrt(dx*dx+dy*dy)) };
+    xaritaChiz();
 });
-
-function polygonYop() {
-    if (polygonNuqtalar.length < 3) return;
-    const center = polygonNuqtalar.reduce((a, p) => [a[0]+p[0], a[1]+p[1]], [0,0]);
-    const lat = center[1] / polygonNuqtalar.length;
-    const lng = center[0] / polygonNuqtalar.length;
-
-    savedShape = {
-        type: 'polygon',
-        lat, lng,
-        radius: 100,
-        coords: polygonNuqtalar.map(p => [p[0], p[1]])
-    };
-
-    // To'liq polygon chiz
-    drawLayarlarOchir2();
-    const geoJson = {
-        type: 'Feature',
-        geometry: { type: 'Polygon', coordinates: [[...polygonNuqtalar, polygonNuqtalar[0]]] }
-    };
-    map.addSource(DRAW_SOURCE, { type: 'geojson', data: geoJson });
-    map.addLayer({ id: DRAW_FILL, type: 'fill', source: DRAW_SOURCE,
-        paint: { 'fill-color': '#22c55e', 'fill-opacity': 0.25 } });
-    map.addLayer({ id: DRAW_LINE, type: 'line', source: DRAW_SOURCE,
-        paint: { 'line-color': '#22c55e', 'line-width': 2 } });
-
-    document.getElementById('zona-info').classList.remove('hidden');
-    document.getElementById('zona-info-text').innerText = '🔷 Ko\'pburchak — ' + polygonNuqtalar.length + ' ta burchak';
-    document.getElementById('chizish-yordam').innerText = 'Polygon chizildi! Tozalash uchun "Tozalash" tugmasini bosing.';
-}
-
-function drawLayarlarOchir2() {
-    [DRAW_FILL, DRAW_LINE, DRAW_POINTS].forEach(id => {
-        if (map.getLayer(id)) map.removeLayer(id);
-    });
-    if (map.getSource(DRAW_SOURCE)) map.removeSource(DRAW_SOURCE);
-    if (map.getSource(DRAW_POINTS + '-src')) {
-        map.removeSource(DRAW_POINTS + '-src');
+map.on('touchend', function() {
+    if (!isDragging) return; isDragging = false;
+    if (circleMarkaz && circleMarkaz.r > 30) {
+        savedShape = { type:'circle', lat:circleMarkaz.lat, lng:circleMarkaz.lng, radius:Math.round(circleMarkaz.r), coords:null };
+        document.getElementById('zona-info').classList.remove('hidden');
+        document.getElementById('zona-info-text').innerText = '⭕ Doira — radius: ' + Math.round(circleMarkaz.r) + ' m';
     }
-}
+});
 
 function chizishBoshlash(tur) {
-    chizishTuri = tur;
-    polygonNuqtalar = [];
-    circleMarkaz    = null;
-    savedShape      = null;
-    isDragging      = false;
-    drawLayarlarOchir2();
-    drawLayerlarOchir();
-
-    document.getElementById('btn-polygon').className =
-        'flex flex-col items-center gap-1 p-3 bg-gray-800 border-2 rounded-xl text-xs font-semibold ' +
-        (tur === 'polygon' ? 'border-blue-500' : 'border-transparent');
-    document.getElementById('btn-circle').className =
-        'flex flex-col items-center gap-1 p-3 bg-gray-800 border-2 rounded-xl text-xs font-semibold ' +
-        (tur === 'circle' ? 'border-blue-500' : 'border-transparent');
-
+    chizishTuri = tur; polygonNuqtalar = []; circleMarkaz = null; savedShape = null; isDragging = false;
+    layerlarOchir();
+    document.getElementById('btn-polygon').className = 'flex flex-col items-center gap-1 p-3 bg-gray-800 border-2 rounded-xl text-xs font-semibold ' + (tur==='polygon'?'border-blue-500':'border-transparent');
+    document.getElementById('btn-circle').className  = 'flex flex-col items-center gap-1 p-3 bg-gray-800 border-2 rounded-xl text-xs font-semibold ' + (tur==='circle'?'border-blue-500':'border-transparent');
     document.getElementById('zona-info').classList.add('hidden');
-    document.getElementById('chizish-yordam').innerText = tur === 'polygon'
-        ? 'Burchaklarni bosib belgilang → tugash uchun birinchi (qizil) nuqtaga bosing yoki 2x bosing'
+    document.getElementById('chizish-yordam').innerText = tur==='polygon'
+        ? 'Bosib burchaklarni belgilang → birinchi (qizil) nuqtaga bosing yoki 2x bosing'
         : 'Markazga bosing va sürüklab radius belgilang';
 }
 
 function chizishBekor() {
-    polygonNuqtalar = [];
-    circleMarkaz    = null;
-    savedShape      = null;
-    isDragging      = false;
-    drawLayarlarOchir2();
-    drawLayerlarOchir();
+    polygonNuqtalar = []; circleMarkaz = null; savedShape = null; isDragging = false;
+    layerlarOchir();
     document.getElementById('zona-info').classList.add('hidden');
-    document.getElementById('chizish-yordam').innerText =
-        chizishTuri === 'polygon'
-            ? 'Burchaklarni bosib belgilang → tugash uchun birinchi (qizil) nuqtaga bosing yoki 2x bosing'
-            : 'Markazga bosing va sürüklab radius belgilang';
-}
-
-// ── Qidiruv ──────────────────────────────────────────────────────────────────
-function qidirish() {
-    const so = document.getElementById('qidiruv-input').value.trim();
-    if (!so) return;
-    const natEl  = document.getElementById('qidiruv-natijalar');
-    const xatoEl = document.getElementById('qidiruv-xato');
-    const loadEl = document.getElementById('qidiruv-loading');
-    natEl.classList.add('hidden'); xatoEl.classList.add('hidden');
-    loadEl.classList.remove('hidden'); natEl.innerHTML = '';
-
-    fetch('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(so) +
-          '&format=json&limit=5&accept-language=uz&countrycodes=uz')
-        .then(r => r.json())
-        .then(results => {
-            if (!results.length) return fetch('https://nominatim.openstreetmap.org/search?q=' +
-                encodeURIComponent(so) + '&format=json&limit=5&accept-language=uz').then(r => r.json());
-            return results;
-        })
-        .then(results => {
-            loadEl.classList.add('hidden');
-            if (!results || !results.length) {
-                xatoEl.innerText = 'Hech narsa topilmadi';
-                xatoEl.classList.remove('hidden'); return;
-            }
-            natEl.classList.remove('hidden');
-            natEl.innerHTML = results.map(r =>
-                '<button onclick="natijaTanla(' + r.lat + ',' + r.lon + ',\'' +
-                r.display_name.replace(/'/g,"\\'") + '\')" ' +
-                'class="w-full text-left px-4 py-3 text-sm bg-gray-800 hover:bg-gray-700 border-b border-gray-700 last:border-0">' +
-                '<span class="text-white block">' + r.display_name.split(',').slice(0,2).join(',') + '</span>' +
-                '<span class="text-gray-500 text-xs">' + r.display_name.split(',').slice(2,4).join(',') + '</span></button>'
-            ).join('');
-        })
-        .catch(() => { loadEl.classList.add('hidden'); xatoEl.innerText = 'Internet xatosi'; xatoEl.classList.remove('hidden'); });
-}
-
-function natijaTanla(lat, lng, manzil) {
-    document.getElementById('qidiruv-natijalar').classList.add('hidden');
-    document.getElementById('qidiruv-input').value = manzil.split(',')[0].trim();
-    const nomaEl = document.getElementById('zona-nomi');
-    if (!nomaEl.value.trim()) nomaEl.value = manzil.split(',')[0].trim();
-    map.flyTo({ center: [parseFloat(lng), parseFloat(lat)], zoom: 16, duration: 800 });
+    document.getElementById('chizish-yordam').innerText = chizishTuri==='polygon'
+        ? 'Bosib burchaklarni belgilang → birinchi (qizil) nuqtaga bosing yoki 2x bosing'
+        : 'Markazga bosing va sürüklab radius belgilang';
 }
 
 // ── Saqlash ──────────────────────────────────────────────────────────────────
@@ -497,40 +420,27 @@ function getCsrf() {
 function zonaQosh() {
     const nomi   = document.getElementById('zona-nomi').value.trim();
     const xatoEl = document.getElementById('zona-xato');
-
-    if (!nomi)       { xatoEl.innerText = 'Zona nomini kiriting!'; xatoEl.classList.remove('hidden'); return; }
-    if (!savedShape) { xatoEl.innerText = 'Xaritada zona chizing!'; xatoEl.classList.remove('hidden'); return; }
+    if (!nomi)       { xatoEl.innerText='Zona nomini kiriting!'; xatoEl.classList.remove('hidden'); return; }
+    if (!savedShape) { xatoEl.innerText='Xaritada zona chizing!'; xatoEl.classList.remove('hidden'); return; }
     xatoEl.classList.add('hidden');
 
     fetch('{% url "api_zona_saqlash" %}', {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-        body: JSON.stringify({
-            nomi,
-            lat:    savedShape.lat,
-            lng:    savedShape.lng,
-            radius: savedShape.radius,
-            type:   savedShape.type,
-            coords: savedShape.coords || null,
-        })
+        method:'POST', credentials:'same-origin',
+        headers:{ 'Content-Type':'application/json', 'X-CSRFToken':getCsrf() },
+        body: JSON.stringify({ nomi, lat:savedShape.lat, lng:savedShape.lng, radius:savedShape.radius, type:savedShape.type, coords:savedShape.coords||null })
     })
-    .then(r => r.json())
-    .then(d => {
-        if (d.id) window.location.reload();
-        else { xatoEl.innerText = d.error || 'Xatolik'; xatoEl.classList.remove('hidden'); }
-    })
-    .catch(() => { xatoEl.innerText = 'Server xatosi'; xatoEl.classList.remove('hidden'); });
+    .then(r=>r.json())
+    .then(d=>{ if(d.id) window.location.reload(); else { xatoEl.innerText=d.error||'Xatolik'; xatoEl.classList.remove('hidden'); } })
+    .catch(()=>{ xatoEl.innerText='Server xatosi'; xatoEl.classList.remove('hidden'); });
 }
 
 // ── Tab ──────────────────────────────────────────────────────────────────────
 function showTab(tab) {
-    document.getElementById('panel-qosh').classList.toggle('hidden', tab !== 'qosh');
-    document.getElementById('panel-list').classList.toggle('hidden', tab !== 'list');
-    document.getElementById('tab-qosh').className = 'flex-1 py-3 text-sm font-semibold border-b-2 ' +
-        (tab === 'qosh' ? 'text-blue-400 border-blue-500' : 'text-gray-500 border-transparent');
-    document.getElementById('tab-list').className = 'flex-1 py-3 text-sm font-semibold border-b-2 ' +
-        (tab === 'list' ? 'text-blue-400 border-blue-500' : 'text-gray-500 border-transparent');
-    if (tab === 'qosh') setTimeout(() => map.resize(), 100);
+    document.getElementById('panel-qosh').classList.toggle('hidden', tab!=='qosh');
+    document.getElementById('panel-list').classList.toggle('hidden', tab!=='list');
+    document.getElementById('tab-qosh').className = 'flex-1 py-3 text-sm font-semibold border-b-2 ' + (tab==='qosh'?'text-blue-400 border-blue-500':'text-gray-500 border-transparent');
+    document.getElementById('tab-list').className = 'flex-1 py-3 text-sm font-semibold border-b-2 ' + (tab==='list'?'text-blue-400 border-blue-500':'text-gray-500 border-transparent');
+    if (tab==='qosh') setTimeout(()=>map.resize(), 100);
 }
 </script>
 </body>
