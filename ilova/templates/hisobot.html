@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>Hisobot</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen pb-24">
+
+<div class="bg-gray-900 px-4 pt-10 pb-4 sticky top-0 z-50 border-b border-gray-800">
+    <h1 class="text-xl font-bold">📊 Hisobot</h1>
+    <p class="text-gray-400 text-sm mt-0.5">{{ tanlangan_sana|date:"d-M Y" }}</p>
+</div>
+
+<!-- Hafta kunlari -->
+<div class="flex gap-2 px-4 py-3 overflow-x-auto bg-gray-900 border-b border-gray-800 sticky top-[72px] z-40">
+    {% for kun in hafta %}
+    <a href="{% url 'hisobot_sana' kun.year kun.month kun.day %}"
+        class="flex-shrink-0 flex flex-col items-center px-3 py-2 rounded-xl text-xs font-semibold {% if kun == tanlangan_sana %}bg-blue-600 text-white{% else %}bg-gray-800 text-gray-400{% endif %}">
+        <span>{{ kun|date:"D" }}</span>
+        <span class="text-base font-bold mt-0.5">{{ kun|date:"d" }}</span>
+    </a>
+    {% endfor %}
+</div>
+
+<!-- Umumiy statistika -->
+{% with keldilar=ishchilar|length %}
+<div class="px-4 py-3 grid grid-cols-3 gap-3">
+    <div class="bg-gray-900 rounded-2xl p-3 text-center border border-gray-800">
+        <p class="text-2xl font-bold text-green-400">
+            {% for i in ishchilar %}{% if i.keldi %}1{% endif %}{% endfor %}
+        </p>
+        <p class="text-xs text-gray-500 mt-1">Keldi</p>
+    </div>
+    <div class="bg-gray-900 rounded-2xl p-3 text-center border border-gray-800">
+        <p class="text-2xl font-bold text-red-400">
+            {% for i in ishchilar %}{% if not i.keldi %}1{% endif %}{% endfor %}
+        </p>
+        <p class="text-xs text-gray-500 mt-1">Kelmadi</p>
+    </div>
+    <div class="bg-gray-900 rounded-2xl p-3 text-center border border-gray-800">
+        <p class="text-2xl font-bold text-white">{{ ishchilar|length }}</p>
+        <p class="text-xs text-gray-500 mt-1">Jami</p>
+    </div>
+</div>
+{% endwith %}
+
+<!-- Ishchilar ro'yxati -->
+<div class="px-4 space-y-2 pb-4">
+    {% for i in ishchilar %}
+    <a href="{% url 'hisobot_ishchi' i.profil.id %}?sana={{ tanlangan_sana|date:'Y-m-d' }}"
+        class="block bg-gray-900 rounded-2xl p-4 border {% if i.keldi %}border-green-900/50{% else %}border-red-900/50{% endif %} active:opacity-70">
+        <div class="flex items-center gap-3">
+            <!-- Avatar -->
+            <div class="w-11 h-11 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+                {% if i.profil.rasm %}
+                <img src="{{ i.profil.rasm.url }}" class="w-full h-full object-cover">
+                {% else %}
+                <div class="w-full h-full flex items-center justify-center text-xl">👤</div>
+                {% endif %}
+            </div>
+            <!-- Info -->
+            <div class="flex-1 min-w-0">
+                <p class="font-semibold truncate">{{ i.profil.ism }}</p>
+                <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {% if i.keldi %}
+                    <span class="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded-full">✅ Keldi</span>
+                    {% else %}
+                    <span class="text-xs bg-red-900/50 text-red-400 px-2 py-0.5 rounded-full">❌ Kelmadi</span>
+                    {% endif %}
+                    {% if i.jarima_sum %}
+                    <span class="text-xs bg-red-900/30 text-red-400 px-2 py-0.5 rounded-full">🚫 {{ i.jarima_sum|floatformat:0 }} so'm</span>
+                    {% endif %}
+                    {% if i.mukofot_sum %}
+                    <span class="text-xs bg-green-900/30 text-green-400 px-2 py-0.5 rounded-full">🏆 {{ i.mukofot_sum|floatformat:0 }} so'm</span>
+                    {% endif %}
+                </div>
+            </div>
+            <span class="text-gray-600 text-lg">›</span>
+        </div>
+    </a>
+    {% empty %}
+    <div class="text-center py-16 text-gray-600">
+        <p class="text-4xl mb-3">👷</p>
+        <p>Ishchilar yo'q</p>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pastki nav -->
+<div class="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 flex z-50">
+    <a href="{% url 'ishchilar' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">👷</span><span class="text-xs mt-0.5">Ishchilar</span>
+    </a>
+    <a href="{% url 'jarima' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">⚖️</span><span class="text-xs mt-0.5">Jarima</span>
+    </a>
+    <a href="{% url 'hisobot' %}" class="flex-1 flex flex-col items-center py-3 text-blue-400">
+        <span class="text-xl">📊</span><span class="text-xs mt-0.5">Hisobot</span>
+    </a>
+    <a href="{% url 'zona' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">📍</span><span class="text-xs mt-0.5">Zonalar</span>
+    </a>
+    <a href="{% url 'dashboard' %}" class="flex-1 flex flex-col items-center py-3 text-gray-500">
+        <span class="text-xl">🌍</span><span class="text-xs mt-0.5">Xarita</span>
+    </a>
+</div>
+
+</body>
+</html>

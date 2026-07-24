@@ -6,7 +6,7 @@ from django.views.static import serve
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('ishchilar/admin/', admin.site.urls),  # /ishchilar/admin/ ham ishlaydi
+    path('ishchilar/admin/', admin.site.urls),
     path('', include('ilova.urls')),
 ]
 

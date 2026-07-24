@@ -223,13 +223,20 @@ def zona_saqlash_api(request):
     import json
     try:
         data = json.loads(request.body)
-        nomi = data.get('nomi', '').strip()
-        lat = float(data.get('lat'))
-        lng = float(data.get('lng'))
+        nomi   = data.get('nomi', '').strip()
+        lat    = float(data.get('lat'))
+        lng    = float(data.get('lng'))
         radius = int(data.get('radius', 200))
+        coords = data.get('coords', None)   # polygon koordinatlar [[lat,lng], ...]
         if not nomi:
             return JsonResponse({'error': 'Zona nomi kiriting'}, status=400)
-        zona = IshZonasi.objects.create(nomi=nomi, markaz_lat=lat, markaz_lng=lng, radius_metr=radius)
+        zona = IshZonasi.objects.create(
+            nomi=nomi,
+            markaz_lat=lat,
+            markaz_lng=lng,
+            radius_metr=radius,
+            polygon_coords=coords,
+        )
         return JsonResponse({'id': zona.id, 'nomi': zona.nomi})
     except (ValueError, TypeError, KeyError) as e:
         return JsonResponse({'error': str(e)}, status=400)
@@ -336,9 +343,15 @@ def _geofence_tekshir(profil, lat, lng):
     # Kamida bitta zonada bo'lsa — jarima yo'q
     for iz in ishchi_zonalar:
         z = iz.zona
-        d = _masofa(lat, lng, float(z.markaz_lat), float(z.markaz_lng))
-        if d <= z.radius_metr:
-            return  # Zona ichida — OK
+        if z.polygon_coords:
+            # Polygon ichida ekanligini tekshirish
+            if _nuqta_polygonda(lat, lng, z.polygon_coords):
+                return
+        else:
+            # Doira ichida ekanligini tekshirish
+            d = _masofa(lat, lng, float(z.markaz_lat), float(z.markaz_lng))
+            if d <= z.radius_metr:
+                return
 
     # Barcha zonalardan tashqarida — bugun jarima yozilganmi?
     bugun = hozir.date()
@@ -355,6 +368,20 @@ def _geofence_tekshir(profil, lat, lng):
         sabab=f"Ish zonasidan tashqarida aniqlandi ({hozir.strftime('%H:%M')})",
         avtomatik=True,
     )
+
+
+def _nuqta_polygonda(lat, lng, coords):
+    """Ray casting algoritmi — nuqta polygon ichida ekanligini tekshiradi"""
+    n = len(coords)
+    ichida = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = coords[i][1], coords[i][0]
+        xj, yj = coords[j][1], coords[j][0]
+        if ((yi > lat) != (yj > lat)) and (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi):
+            ichida = not ichida
+        j = i
+    return ichida
 
 
 def _masofa(lat1, lng1, lat2, lng2):
@@ -407,3 +434,119 @@ class XaritaMalumotlariAPI(APIView):
             })
 
         return Response({'rejim': rejim, 'majliz': aktiv_profillar})
+
+
+# ── Hisobot ───────────────────────────────────────────────────────────────────
+import math as _math
+from datetime import date as _date, timedelta as _timedelta
+from django.http import HttpResponseRedirect
+
+
+def _kun_hisobot(profil, sana):
+    from django.utils import timezone as tz
+    tarix = HarakatTarixi.objects.filter(profil=profil, vaqt__date=sana).order_by('vaqt')
+    keldi = False
+    yol_matn = []
+    oxirgi_zona = None
+
+    for h in tarix:
+        lat = float(h.latitude)
+        lng = float(h.longitude)
+        vaqt_str = tz.localtime(h.vaqt).strftime('%H:%M')
+
+        # Zona tekshirish
+        ichida = False
+        zona_nomi = None
+        for iz in profil.zonalari.select_related('zona').all():
+            z = iz.zona
+            if z.polygon_coords:
+                if _nuqta_polygonda(lat, lng, z.polygon_coords):
+                    ichida = True
+                    zona_nomi = z.nomi
+                    break
+            else:
+                d = _masofa(lat, lng, float(z.markaz_lat), float(z.markaz_lng))
+                if d <= z.radius_metr:
+                    ichida = True
+                    zona_nomi = z.nomi
+                    break
+
+        if ichida:
+            keldi = True
+            if zona_nomi != oxirgi_zona:
+                yol_matn.append(f"{vaqt_str} — 📍 {zona_nomi} ga kirdi")
+                oxirgi_zona = zona_nomi
+        else:
+            if oxirgi_zona is not None:
+                yol_matn.append(f"{vaqt_str} — 🚶 {oxirgi_zona} dan chiqdi")
+                oxirgi_zona = None
+
+    jarimalar  = JarimaMukofot.objects.filter(profil=profil, sana=sana, turi='jarima')
+    mukofotlar = JarimaMukofot.objects.filter(profil=profil, sana=sana, turi='mukofot')
+
+    return {
+        'keldi':       keldi,
+        'yol_matn':    yol_matn,
+        'jarima_sum':  sum(j.miqdor for j in jarimalar),
+        'mukofot_sum': sum(m.miqdor for m in mukofotlar),
+        'jarimalar':   list(jarimalar),
+        'mukofotlar':  list(mukofotlar),
+        'tarix_soni':  tarix.count(),
+    }
+
+
+@login_required
+@user_passes_test(_is_boshliq, login_url='mobil')
+def hisobot_view(request):
+    bugun = _date.today()
+    hafta = [bugun - _timedelta(days=i) for i in range(7)]
+    profillar = FoydalanuvchiProfil.objects.filter(
+        user__is_staff=False, user__is_superuser=False).order_by('ism')
+    ishchilar = []
+    for p in profillar:
+        k = _kun_hisobot(p, bugun)
+        ishchilar.append({'profil': p, 'keldi': k['keldi'],
+                          'jarima_sum': k['jarima_sum'], 'mukofot_sum': k['mukofot_sum']})
+    return render(request, 'hisobot.html', {
+        'ishchilar': ishchilar, 'bugun': bugun,
+        'hafta': hafta, 'tanlangan_sana': bugun})
+
+
+@login_required
+@user_passes_test(_is_boshliq, login_url='mobil')
+def hisobot_sana_view(request, yil, oy, kun):
+    try:
+        from datetime import date as d
+        sana = d(yil, oy, kun)
+    except ValueError:
+        sana = _date.today()
+    bugun = _date.today()
+    hafta = [bugun - _timedelta(days=i) for i in range(7)]
+    profillar = FoydalanuvchiProfil.objects.filter(
+        user__is_staff=False, user__is_superuser=False).order_by('ism')
+    ishchilar = []
+    for p in profillar:
+        k = _kun_hisobot(p, sana)
+        ishchilar.append({'profil': p, 'keldi': k['keldi'],
+                          'jarima_sum': k['jarima_sum'], 'mukofot_sum': k['mukofot_sum']})
+    return render(request, 'hisobot.html', {
+        'ishchilar': ishchilar, 'bugun': bugun,
+        'hafta': hafta, 'tanlangan_sana': sana})
+
+
+@login_required
+@user_passes_test(_is_boshliq, login_url='mobil')
+def hisobot_ishchi_view(request, profil_id):
+    profil = get_object_or_404(FoydalanuvchiProfil, id=profil_id,
+                                user__is_staff=False, user__is_superuser=False)
+    bugun = _date.today()
+    hafta = [bugun - _timedelta(days=i) for i in range(7)]
+    sana_str = request.GET.get('sana', '')
+    try:
+        from datetime import datetime
+        sana = datetime.strptime(sana_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        sana = bugun
+    k = _kun_hisobot(profil, sana)
+    return render(request, 'hisobot_ishchi.html', {
+        'profil': profil, 'sana': sana, 'hafta': hafta, 'bugun': bugun, **k})
